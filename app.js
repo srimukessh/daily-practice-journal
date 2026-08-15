@@ -21,12 +21,10 @@ const SECTIONS = [
   {
     title: "Through the day",
     items: [
-      { id: "catch_310", label: "Caught the 3/10", log: true,
-        logPh: "A 3/10 you caught — what did you feel / want?",
-        hint: "When irritation, fear, defensiveness or anger appears, notice the body first — “What am I feeling? What am I wanting right now?” Add each one through the day. Tap a box and dictate with Wispr." },
-      { id: "one_pause", label: "Pauses", log: true,
-        logPh: "A pause — what was the urge? What did you do instead?",
-        hint: "An urge to defend, correct, persuade, message, retaliate or fix — and you didn't act straight away. You let the discomfort exist. Add each pause through the day." },
+      { id: "catch_310", label: "3/10s & pauses", log: true,
+        logPh: "What happened, what you felt / wanted — and if you paused, what you did instead",
+        aiHint: "each charged moment — a 3/10 they caught (irritation/fear/defensiveness/anger) and/or a pause where they resisted an urge to act (defend, correct, reply, retaliate, fix)",
+        hint: "Notice the charged moments — irritation, fear, defensiveness, anger (your 3/10s) — body first: “What am I feeling? What am I wanting?” And if you caught the urge to defend, correct, reply, retaliate or fix and didn’t act, note that pause too. Add each one through the day." },
     ],
   },
   {
@@ -546,7 +544,8 @@ function buildAiSpec() {
     }
     if (it.log) {
       props[it.id] = { type: ["array", "null"], items: { type: "string" } };
-      guide.push(`${it.id} (array of strings or null): one entry per distinct “${it.label}” moment. Each entry ONE full first-person sentence — the situation + what they felt (incl. body sensations) + what they were wanting. Never a single word.`);
+      const what = it.aiHint || `each distinct “${it.label}” moment`;
+      guide.push(`${it.id} (array of strings or null): ${what}. One entry per moment, each ONE full first-person sentence — the situation + what they felt (incl. body sensations) + what they were wanting (and for a pause, what they did instead). Never a single word.`);
     }
   }
   return {
@@ -808,25 +807,63 @@ function attachRecorder(ov) {
   recBtn.onclick = () => { (rec && rec.state === "recording") ? rec.stop() : start(); };
 }
 
+// Editable review: every field the AI filled is shown as an editable control.
+// Toggle off a wrongly-ticked item; fix any wording; then Apply what you edited.
 function showReview(ds, result) {
-  const lines = summariseResult(result);
-  const body = lines.length
-    ? lines.map((l) => `<div class="rev-row"><div class="rev-h">${l.h}</div><div class="rev-b"></div></div>`).join("")
-    : `<p class="sheet-sub">I couldn't pull anything structured from that. Try adding more detail.</p>`;
+  // collect ticked checks (toggleable) and editable text fields
+  const checks = [], fields = [];
+  for (const it of ALL_ITEMS) {
+    if (!it.group && !it.log && result[it.id] === true) checks.push({ id: it.id, label: it.label });
+    if (it.group) for (const g of it.group) if (result[g.id] === true) checks.push({ id: g.id, label: g.label });
+    if (it.select && result[it.select.id]) fields.push({ kind: "select", id: it.select.id, label: it.select.label, value: result[it.select.id], options: it.select.options });
+    if (it.notes) for (const n of it.notes) if (result[n.id] && String(result[n.id]).trim())
+      fields.push({ kind: "note", id: n.id, label: n.label, value: String(result[n.id]).trim() });
+    if (it.log && Array.isArray(result[it.id]) && result[it.id].length)
+      fields.push({ kind: "log", id: it.id, label: it.label + " (one per line)", value: result[it.id].join("\n") });
+  }
+
+  const hasAny = checks.length || fields.length;
+  const checksHtml = checks.length
+    ? `<div class="rev-checks">${checks.map((c) => `<button class="chip on" data-check="${c.id}"></button>`).join("")}</div>` : "";
+  const fieldsHtml = fields.map((f, i) => {
+    if (f.kind === "select") {
+      const opts = f.options.map((o) => `<option value="${o}">${o || "— none —"}</option>`).join("");
+      return `<div class="rev-row"><label class="rev-h"></label><select data-field="${f.id}" data-kind="select">${opts}</select></div>`;
+    }
+    const rows = f.kind === "log" ? Math.min(6, (f.value.split("\n").length + 1)) : 3;
+    return `<div class="rev-row"><label class="rev-h"></label><textarea data-field="${f.id}" data-kind="${f.kind}" rows="${rows}"></textarea></div>`;
+  }).join("");
+
   const ov = buildOverlay(`
     <div class="sheet-head"><h2>Here's what I understood</h2><button class="sheet-x" aria-label="close">×</button></div>
-    <div class="review">${body}</div>
+    ${hasAny ? `<p class="sheet-sub">Tap a tag to remove it, and edit any text. Then apply.</p>${checksHtml}<div class="review">${fieldsHtml}</div>`
+             : `<p class="sheet-sub">I couldn't pull anything structured from that. Try adding more detail.</p>`}
     <div class="sheet-actions">
       <button class="secondary-btn" id="rev-discard">Discard</button>
       <button class="primary-btn" id="rev-apply">Apply to ${prettyDate(ds)}</button>
     </div>`);
-  // set text content safely (avoid HTML injection from transcript)
-  const rows = ov.querySelectorAll(".rev-row");
-  lines.forEach((l, i) => { rows[i].querySelector(".rev-b").textContent = l.b; });
-  ov.querySelector(".sheet-x").onclick = () => ov.remove();
-  ov.querySelector("#rev-discard").onclick = () => ov.remove();
+
+  // fill values as text (avoids HTML injection from the transcript)
+  ov.querySelectorAll("[data-check]").forEach((c, i) => { c.textContent = checks[i].label; });
+  ov.querySelectorAll(".rev-row").forEach((row, i) => {
+    row.querySelector(".rev-h").textContent = fields[i].label;
+    const ctrl = row.querySelector("[data-field]");
+    ctrl.value = fields[i].value;
+  });
+  ov.querySelectorAll("[data-check]").forEach((c) => { c.onclick = () => c.classList.toggle("on"); });
+
+  const close = () => ov.remove();
+  ov.querySelector(".sheet-x").onclick = close;
+  ov.querySelector("#rev-discard").onclick = close;
   ov.querySelector("#rev-apply").onclick = () => {
-    mergeResult(ds, result); renderChecklist(); ov.remove(); toast("Added to your journal");
+    const edited = {};
+    ov.querySelectorAll("[data-check].on").forEach((c) => { edited[c.dataset.check] = true; });
+    ov.querySelectorAll("[data-field]").forEach((ctrl) => {
+      const id = ctrl.dataset.field;
+      if (ctrl.dataset.kind === "log") edited[id] = ctrl.value.split("\n").map((s) => s.trim()).filter(Boolean);
+      else edited[id] = ctrl.value.trim();
+    });
+    mergeResult(ds, edited); renderChecklist(); close(); toast("Added to your journal");
   };
 }
 
@@ -908,7 +945,7 @@ function bindEvents() {
   setDate(todayYmd());
   // test hook (harmless; only active with ?__test in the URL) — set before async auth so tests don't race it
   if (location.search.includes("__test")) {
-    window.__t = { buildAiSpec, mergeResult, summariseResult, loadEntry, ALL_ITEMS, SPEAKING_SCRIPT, openSpeak, transcribeBlob };
+    window.__t = { buildAiSpec, mergeResult, summariseResult, loadEntry, ALL_ITEMS, SPEAKING_SCRIPT, openSpeak, transcribeBlob, showReview };
   }
   await initAuth();
   scheduleReminders();
