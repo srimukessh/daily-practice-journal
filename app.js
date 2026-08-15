@@ -14,8 +14,8 @@ const SECTIONS = [
         notes: [{ id: "intention_note", label: "Today's intention (optional)", ph: "What do I want to be mindful of today?" }] },
       { id: "concentration", label: "Concentration meditation", minutes: true,
         hint: "Focus on the breath. When the mind wanders, notice it and gently return." },
-      { id: "analytical", label: "Analytical meditation", minutes: true,
-        hint: "Bring up a mild example, notice it in the body, understand what you're wanting, and practise tolerating the feeling without needing to act.",
+      { id: "analytical", label: "Analytical meditation", minutes: true, routine: true,
+        hint: "Bring up a mild example, notice it in the body, understand what you're wanting, and practise tolerating the feeling without needing to act. Tap “Guide me” for a step-by-step routine.",
         select: { id: "analytical_theme", label: "Theme for today",
           options: ["", "Anger", "Being misunderstood", "Unfairness", "Rejection", "Attachment", "Accepting “no”"] },
         notes: [{ id: "analytical_note", label: "What came up (optional)", ph: "What did I notice in the body? What was I wanting?" }] },
@@ -88,10 +88,11 @@ function loadEntry(ds) {
       const e = JSON.parse(raw);
       if (!e.logs) e.logs = {};   // back-compat for entries saved before logs existed
       if (!e.mins) e.mins = {};   // back-compat for entries saved before minutes existed
+      if (!("routine" in e)) e.routine = null;
       return e;
     } catch (_) {}
   }
-  return { checks: {}, notes: {}, logs: {}, mins: {}, updated_at: null };
+  return { checks: {}, notes: {}, logs: {}, mins: {}, routine: null, updated_at: null };
 }
 function storeEntry(ds, entry) { localStorage.setItem(LKEY(ds), JSON.stringify(entry)); }
 function allLocalDates() {
@@ -146,6 +147,7 @@ let calCursor = new Date();
 let sb = null;         // supabase client
 let user = null;
 let pushTimer = null;
+let userContext = "";  // standing note (e.g. "going through a breakup") — feeds meditation routines
 
 // ===== Rendering: checklist =====
 const CHECK_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12l5 5L20 6"/></svg>';
@@ -244,6 +246,24 @@ function renderItem(item, entry) {
     wrap.innerHTML = sel;
     wrap.querySelector("select").onchange = (e) => setNote(item.select.id, e.target.value);
     el.appendChild(wrap);
+  }
+
+  // guided routine (analytical meditation): generate + step through
+  if (item.routine) {
+    const r = document.createElement("div");
+    r.className = "routine-row";
+    const rt = entry.routine;
+    if (rt && rt.steps && rt.steps.length) {
+      const done = (rt.done || []).filter(Boolean).length;
+      r.innerHTML = `<button class="routine-btn">▶ Continue routine (${done}/${rt.steps.length})</button>` +
+        `<button class="routine-new" aria-label="new routine">↻</button>`;
+      r.querySelector(".routine-btn").onclick = () => openRoutineView(item);
+      r.querySelector(".routine-new").onclick = () => openRoutineInput(item);
+    } else {
+      r.innerHTML = `<button class="routine-btn">🧭 Guide me through it</button>`;
+      r.querySelector(".routine-btn").onclick = () => openRoutineInput(item);
+    }
+    el.appendChild(r);
   }
 
   // sub-check chips (opponent powers)
@@ -414,6 +434,7 @@ function renderSettings() {
   else if (denied) { btn.textContent = "Notifications blocked — allow in browser settings"; btn.disabled = true; }
   else if (r.on) { btn.textContent = "Turn reminders off"; btn.onclick = disablePush; }
   else { btn.textContent = "Enable reminders"; btn.onclick = enablePush; }
+  const ctx = $("#context"); if (ctx) ctx.value = userContext;
   $("#acct-email").textContent = user ? `Signed in as ${user.email}` : (SYNC_ON ? "Not signed in" : "Offline-only mode (Supabase not configured)");
   $("#signout-btn").classList.toggle("hidden", !user);
 }
@@ -475,6 +496,21 @@ async function syncReminderTimes() {
   if (sub) await saveSubscription(sub, true);
 }
 
+// ===== Standing user context (personalises analytical-meditation routines) =====
+async function loadContext() {
+  if (!sb || !user) return;
+  try {
+    const { data } = await sb.from("profiles").select("context").eq("user_id", user.id).maybeSingle();
+    userContext = (data && data.context) || "";
+    const ta = $("#context"); if (ta) ta.value = userContext;
+  } catch (_) {}
+}
+async function saveContext(text) {
+  userContext = text;
+  if (!sb || !user) return;
+  try { await sb.from("profiles").upsert({ user_id: user.id, context: text, updated_at: nowIso() }, { onConflict: "user_id" }); } catch (_) {}
+}
+
 // ===== Sync (Supabase) =====
 function setSyncState(txt) { $("#sync-state").textContent = txt; }
 
@@ -494,7 +530,7 @@ async function pushDirty() {
       const e = loadEntry(ds);
       const { error } = await sb.from("entries").upsert({
         user_id: user.id, entry_date: ds,
-        data: { checks: e.checks, notes: e.notes, logs: e.logs || {}, mins: e.mins || {} },
+        data: { checks: e.checks, notes: e.notes, logs: e.logs || {}, mins: e.mins || {}, routine: e.routine || null },
         updated_at: e.updated_at || nowIso(),
       }, { onConflict: "user_id,entry_date" });
       if (error) throw error;
@@ -519,7 +555,7 @@ async function pullAll() {
       const remoteTime = row.updated_at ? Date.parse(row.updated_at) : 0;
       const localTime = local.updated_at ? Date.parse(local.updated_at) : 0;
       if (remoteTime >= localTime) {
-        storeEntry(ds, { checks: row.data.checks || {}, notes: row.data.notes || {}, logs: row.data.logs || {}, mins: row.data.mins || {}, updated_at: row.updated_at });
+        storeEntry(ds, { checks: row.data.checks || {}, notes: row.data.notes || {}, logs: row.data.logs || {}, mins: row.data.mins || {}, routine: row.data.routine || null, updated_at: row.updated_at });
       }
     }
     setSyncState("synced");
@@ -568,6 +604,7 @@ function onSignedIn(u) {
   pushDirty();
   processPending();
   processPendingRecordings();
+  loadContext();
 }
 
 // ===== Toast =====
@@ -974,6 +1011,88 @@ function showReview(ds, result) {
   };
 }
 
+// ===== Analytical-meditation guided routine =====
+function saveRoutine(routine) {
+  const e = loadEntry(currentDs);
+  e.routine = routine; e.updated_at = nowIso();
+  storeEntry(currentDs, e); markDirty(currentDs); schedulePush();
+}
+
+function openRoutineInput(item) {
+  if (!SYNC_ON) return toast("Add Supabase + OpenAI to enable this");
+  const entry = loadEntry(currentDs);
+  const themes = item.select ? item.select.options.filter(Boolean) : [];
+  const cur = entry.notes[item.select?.id] || "";
+  const opts = ['<option value="">— pick a theme —</option>']
+    .concat(themes.map((o) => `<option ${o === cur ? "selected" : ""}>${o}</option>`)).join("");
+  const ov = buildOverlay(`
+    <div class="sheet-head"><h2>Guide my meditation</h2><button class="sheet-x" aria-label="close">×</button></div>
+    <p class="sheet-sub">Pick a theme and, if you like, what's on your mind. I'll make a short step-by-step routine${userContext ? " using your context" : ""}.</p>
+    <label class="rev-h">Theme</label>
+    <select id="rt-theme">${opts}</select>
+    <label class="rev-h" style="margin-top:12px;display:block">What happened / what's on your mind (optional)</label>
+    <textarea id="rt-sit" rows="3" placeholder="e.g. a friend cancelled again and I felt rejected"></textarea>
+    <div class="sheet-actions">
+      <button class="secondary-btn" id="rt-cancel">Cancel</button>
+      <button class="primary-btn" id="rt-go">Generate routine</button>
+    </div>`);
+  ov.querySelector(".sheet-x").onclick = () => ov.remove();
+  ov.querySelector("#rt-cancel").onclick = () => ov.remove();
+  ov.querySelector("#rt-go").onclick = async () => {
+    if (!navigator.onLine || !user) return toast("Needs internet to generate");
+    const theme = ov.querySelector("#rt-theme").value;
+    const situation = ov.querySelector("#rt-sit").value.trim();
+    if (item.select && theme) setNote(item.select.id, theme);
+    ov.remove();
+    const load = buildOverlay(`<div class="loading"><div class="spinner"></div><p>Building your routine…</p></div>`);
+    try {
+      const { data, error } = await sb.functions.invoke("meditation-routine", { body: { theme, situation, context: userContext } });
+      if (error) throw error;
+      if (!data || data.error || !(data.steps && data.steps.length)) throw new Error(data && data.error ? data.error : "no steps");
+      load.remove();
+      saveRoutine({ theme, situation, steps: data.steps, done: data.steps.map(() => false), ts: nowIso() });
+      openRoutineView(item);
+    } catch (e) { load.remove(); toast("Couldn't generate routine"); console.warn("routine failed", e); }
+  };
+  setTimeout(() => ov.querySelector("#rt-sit").focus(), 50);
+}
+
+function openRoutineView(item) {
+  const rt = loadEntry(currentDs).routine;
+  if (!rt || !(rt.steps && rt.steps.length)) return openRoutineInput(item);
+  const stepsHtml = rt.steps.map((_, i) =>
+    `<button class="step" data-i="${i}"><span class="step-num">${i + 1}</span><span class="step-text"></span><span class="step-tick">✓</span></button>`).join("");
+  const sub = [rt.theme, rt.situation].filter(Boolean).join(" · ");
+  const ov = buildOverlay(`
+    <div class="sheet-head"><h2>Analytical meditation</h2><button class="sheet-x" aria-label="close">×</button></div>
+    ${sub ? `<p class="sheet-sub"></p>` : ""}
+    <div class="steps">${stepsHtml}</div>
+    <div class="sheet-actions">
+      <button class="secondary-btn" id="rt-close">Close</button>
+      <button class="secondary-btn" id="rt-regen">New routine</button>
+    </div>`);
+  if (sub) ov.querySelector(".sheet-sub").textContent = sub;
+  const steps = ov.querySelectorAll(".step");
+  steps.forEach((btn, i) => {
+    btn.querySelector(".step-text").textContent = rt.steps[i];
+    btn.classList.toggle("done", !!rt.done[i]);
+    btn.onclick = () => {
+      rt.done[i] = !rt.done[i];
+      btn.classList.toggle("done", rt.done[i]);
+      saveRoutine(rt);
+      if (rt.done.every(Boolean)) {
+        const e = loadEntry(currentDs); e.checks[item.id] = true; e.updated_at = nowIso();
+        storeEntry(currentDs, e); markDirty(currentDs); schedulePush();
+        toast("Meditation complete ✓");
+      }
+    };
+  });
+  const close = () => { ov.remove(); renderChecklist(); };
+  ov.querySelector(".sheet-x").onclick = close;
+  ov.querySelector("#rt-close").onclick = close;
+  ov.querySelector("#rt-regen").onclick = () => { ov.remove(); openRoutineInput(item); };
+}
+
 // ===== Wire up UI =====
 function bindEvents() {
   document.querySelectorAll(".tab").forEach((t) => t.onclick = () => switchView(t.dataset.view));
@@ -987,6 +1106,8 @@ function bindEvents() {
   $("#speak-btn").onclick = openSpeak;
   $("#export-btn").onclick = exportJson;
   $("#sync-now").onclick = syncNow;
+  $("#context").addEventListener("input", (e) => { userContext = e.target.value; });
+  $("#context").addEventListener("blur", (e) => saveContext(e.target.value.trim()));
   $("#signout-btn").onclick = async () => { if (sb) await sb.auth.signOut(); location.reload(); };
 
   ["morning", "evening", "bed"].forEach((k) => {
@@ -1044,7 +1165,7 @@ function bindEvents() {
   setDate(todayYmd());
   // test hook (harmless; only active with ?__test in the URL) — set before async auth so tests don't race it
   if (location.search.includes("__test")) {
-    window.__t = { buildAiSpec, mergeResult, summariseResult, loadEntry, ALL_ITEMS, SPEAKING_SCRIPT, openSpeak, transcribeBlob, showReview };
+    window.__t = { buildAiSpec, mergeResult, summariseResult, loadEntry, ALL_ITEMS, SPEAKING_SCRIPT, openSpeak, transcribeBlob, showReview, saveRoutine, openRoutineView, openRoutineInput };
   }
   await initAuth();
   if ("serviceWorker" in navigator) {

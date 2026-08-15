@@ -1,5 +1,5 @@
 /* Offline app-shell cache. Bump CACHE when you change static files to force an update. */
-const CACHE = "daily-practice-v11";
+const CACHE = "daily-practice-v12";
 const SHELL = [
   "./",
   "./index.html",
