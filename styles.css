@@ -175,9 +175,17 @@ button { font-family: inherit; cursor: pointer; }
 .check svg { width: 16px; height: 16px; opacity: 0; }
 .check.on svg { opacity: 1; }
 .item-body { flex: 1; min-width: 0; }
+.item-labelrow { display: flex; align-items: center; gap: 7px; }
 .item-label { font-weight: 600; }
 .item.done .item-label { color: var(--muted); text-decoration: line-through; text-decoration-color: var(--line); }
-.item-hint { font-size: .84rem; color: var(--muted); margin-top: 2px; }
+.info-btn {
+  flex: 0 0 auto; width: 18px; height: 18px; border-radius: 50%;
+  border: 1.5px solid var(--line); background: transparent; color: var(--muted);
+  font: 700 11px/1 Georgia, serif; font-style: italic; display: grid; place-items: center;
+  padding: 0; transition: all .15s ease;
+}
+.info-btn.open { border-color: var(--indigo); color: var(--indigo); background: var(--indigo-soft); }
+.item-hint { font-size: .84rem; color: var(--muted); margin-top: 7px; }
 
 /* Rejoice — warm, appreciative accent so it reads differently from the "work through it" fields */
 .item-warm {

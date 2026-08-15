@@ -186,8 +186,15 @@ function renderItem(item, entry) {
 
   const body = document.createElement("div");
   body.className = "item-body";
-  body.innerHTML = `<div class="item-label">${item.label}</div>` +
-    (item.hint ? `<div class="item-hint">${item.hint}</div>` : "");
+  body.innerHTML =
+    `<div class="item-labelrow"><span class="item-label">${item.label}</span>` +
+    (item.hint ? `<button class="info-btn" aria-label="what to do">i</button>` : "") + `</div>` +
+    (item.hint ? `<div class="item-hint hidden">${item.hint}</div>` : "");
+  const info = body.querySelector(".info-btn");
+  if (info) {
+    const hintEl = body.querySelector(".item-hint");
+    info.onclick = () => { hintEl.classList.toggle("hidden"); info.classList.toggle("open"); };
+  }
   head.appendChild(body);
 
   // minutes: a number-only box on the right (e.g. how long you meditated)
