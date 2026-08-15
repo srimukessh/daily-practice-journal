@@ -291,11 +291,34 @@ your Supabase database.
 
 ---
 
-## 9. What's still optional / not built
+## 9. Offline voice notes (now built)
 
-- **In-app offline *audio* recording** (record voice with no signal → transcribe on reconnect). Not
-  built. Note: Wispr needs internet anyway, so true offline voice *requires* this piece — it's the
-  only remaining real feature if you want it.
+You can **record your day with zero signal**. The audio is stored on your device (in IndexedDB),
+and the moment you're back online it's transcribed (OpenAI Whisper, via a second Edge Function
+called `transcribe`) and organised into your journal automatically.
+
+```mermaid
+sequenceDiagram
+    participant You
+    participant App
+    participant IDB as IndexedDB (on device)
+    participant T as Edge Function (transcribe)
+    participant O as Edge Function (organise)
+    You->>App: 🎙️ Record (no signal)
+    App->>IDB: store the audio locally
+    Note over App,IDB: waits for connectivity
+    App->>T: on reconnect, upload audio (JWT)
+    T-->>App: text (Whisper)
+    App->>O: organise the text (JWT)
+    O-->>App: structured fields → merged into that day
+```
+
+When you record **online**, it transcribes immediately and drops the text into the box so you can
+review and hit Organise. When **offline**, it queues and runs the above on reconnect.
+
+## 10. What's still optional / not built
+
 - **Reminders** — coded, not switched on/tested yet.
 
-Everything else — offline checklist, sync, streaks/calendar, speak-your-day with review — is live.
+Everything else — offline checklist, sync, streaks/calendar, speak-your-day with review, **and
+offline voice notes** — is live.
