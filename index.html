@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#312e81" />
+  <title>Daily Practice</title>
+
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" href="icons/icon-192.png" />
+  <link rel="apple-touch-icon" href="icons/icon-180.png" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Practice" />
+
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <!-- ===== Sign-in gate ===== -->
+  <section id="auth" class="auth hidden">
+    <div class="auth-card">
+      <div class="brand">
+        <img src="icons/icon-192.png" alt="" width="56" height="56" />
+        <h1>Daily Practice</h1>
+      </div>
+      <p class="auth-sub">Sign in to sync your journal across devices.</p>
+      <form id="auth-form">
+        <input id="email" type="email" inputmode="email" autocomplete="email"
+               placeholder="you@example.com" required />
+        <button type="submit" id="auth-btn">Send magic link</button>
+      </form>
+      <p id="auth-msg" class="auth-msg"></p>
+      <p class="auth-note">You'll get a one-time link by email. No password.</p>
+    </div>
+  </section>
+
+  <!-- ===== App shell ===== -->
+  <main id="app" class="app hidden">
+    <header class="topbar">
+      <button id="prev-day" class="icon-btn" aria-label="Previous day">‹</button>
+      <div class="date-block">
+        <button id="date-label" class="date-label"></button>
+        <div id="sync-state" class="sync-state">·</div>
+      </div>
+      <button id="next-day" class="icon-btn" aria-label="Next day">›</button>
+      <button id="today-btn" class="today-btn" title="Jump to today">Today</button>
+    </header>
+
+    <nav class="tabs">
+      <button class="tab active" data-view="checklist">Checklist</button>
+      <button class="tab" data-view="calendar">History</button>
+      <button class="tab" data-view="settings">Settings</button>
+    </nav>
+
+    <!-- Checklist view -->
+    <section id="view-checklist" class="view">
+      <div class="progress-wrap">
+        <div class="progress-bar"><div id="progress-fill" class="progress-fill"></div></div>
+        <div id="progress-text" class="progress-text"></div>
+      </div>
+      <div id="checklist" class="checklist"></div>
+      <p class="reminder-line" id="bedline">"Regret the behaviour. Don't hate myself. Learn, practise, repeat."</p>
+    </section>
+
+    <!-- Calendar / streaks view -->
+    <section id="view-calendar" class="view hidden">
+      <div class="streaks">
+        <div class="streak-card"><span id="streak-current" class="streak-num">0</span><span class="streak-label">Current streak</span></div>
+        <div class="streak-card"><span id="streak-best" class="streak-num">0</span><span class="streak-label">Best streak</span></div>
+        <div class="streak-card"><span id="streak-total" class="streak-num">0</span><span class="streak-label">Days practised</span></div>
+      </div>
+      <div class="cal-head">
+        <button id="cal-prev" class="icon-btn" aria-label="Previous month">‹</button>
+        <div id="cal-title" class="cal-title"></div>
+        <button id="cal-next" class="icon-btn" aria-label="Next month">›</button>
+      </div>
+      <div id="calendar" class="calendar"></div>
+      <p class="cal-legend">Tap a day to open it. Ring fullness = how much you completed.</p>
+    </section>
+
+    <!-- Settings view -->
+    <section id="view-settings" class="view hidden">
+      <div class="settings">
+        <h2>Reminders</h2>
+        <p class="settings-hint">Best-effort local notifications. Reliable on Mac & Android; iPhone only fires them while the app has been opened recently — set a phone alarm as backup.</p>
+        <button id="enable-notifs" class="secondary-btn">Enable notifications</button>
+        <label class="time-row"><span>Morning meditation</span><input type="time" id="rem-morning" value="07:30"></label>
+        <label class="time-row"><span>Evening review</span><input type="time" id="rem-evening" value="21:00"></label>
+        <label class="time-row"><span>Before bed</span><input type="time" id="rem-bed" value="22:30"></label>
+
+        <h2>Data</h2>
+        <button id="export-btn" class="secondary-btn">Export journal (JSON)</button>
+        <button id="sync-now" class="secondary-btn">Sync now</button>
+
+        <h2>Account</h2>
+        <p id="acct-email" class="settings-hint"></p>
+        <button id="signout-btn" class="danger-btn">Sign out</button>
+        <p class="settings-hint version">Daily Practice · offline-first PWA</p>
+      </div>
+    </section>
+
+    <div id="toast" class="toast hidden"></div>
+  </main>
+
+  <!-- Supabase JS (loaded from CDN; app still works offline once cached) -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
