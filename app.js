@@ -46,7 +46,7 @@ const SECTIONS = [
       { id: "reading", label: "Reading",
         hint: "Something on emotional regulation / mindfulness. Read slowly; stop when something feels personally important and reflect on it, rather than finishing the chapter.",
         multiselect: { id: "reading_books", label: "Book(s)",
-          options: ["Śāntideva — Bodhicaryāvatāra", "Anger by Thich Nhat Hanh", "The Practice of Lojong", "Tuesdays with Morrie"] },
+          options: ["Śāntideva — Bodhicaryāvatāra", "Anger by Thich Nhat Hanh", "The Practice of Lojong", "Tuesdays with Morrie", "Fiction", "Other"] },
         notes: [{ id: "reading_note", label: "What did you read & learn?", ph: "What book did you read, and what did you learn from it today?" }] },
       { id: "before_bed", label: "Before bed",
         hint: "“Regret the behaviour. Don't hate myself. Learn, practise, repeat.”" },
