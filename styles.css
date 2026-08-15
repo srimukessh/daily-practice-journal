@@ -217,8 +217,13 @@ button { font-family: inherit; cursor: pointer; }
   display: grid; grid-template-columns: auto 1fr auto; align-items: start; gap: 8px;
   background: var(--field); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px;
 }
-.log-time { font-size: .72rem; color: var(--muted); font-variant-numeric: tabular-nums; padding-top: 2px; }
-.log-text { font-size: .92rem; white-space: pre-wrap; word-break: break-word; }
+.log-time { font-size: .72rem; color: var(--muted); font-variant-numeric: tabular-nums; padding-top: 8px; }
+.log-text {
+  width: 100%; border: 1px solid transparent; background: transparent; color: var(--ink);
+  font: inherit; font-size: .92rem; resize: none; overflow: hidden; outline: none;
+  padding: 5px 6px; border-radius: 7px; min-height: 20px;
+}
+.log-text:focus { border-color: var(--indigo); background: var(--field-strong); }
 .log-del { background: none; border: 0; color: var(--muted); font-size: 1.2rem; line-height: 1; padding: 0 2px; }
 .log-add { display: flex; gap: 8px; }
 .log-input {

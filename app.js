@@ -47,9 +47,11 @@ const SECTIONS = [
           { id: "power_rejoice", label: "Rejoice" },
         ],
         notes: [{ id: "powers_note", label: "Notes (optional)", ph: "" }] },
-      { id: "shantideva", label: "Read Śāntideva — 10–15 min",
-        hint: "Read slowly. Stop when something feels personally important and reflect on it, rather than trying to finish the chapter.",
-        notes: [{ id: "shantideva_note", label: "What felt important (optional)", ph: "" }] },
+      { id: "reading", label: "Reading",
+        hint: "Something on emotional regulation / mindfulness. Read slowly; stop when something feels personally important and reflect on it, rather than finishing the chapter.",
+        select: { id: "reading_book", label: "Book",
+          options: ["", "Śāntideva — Bodhicaryāvatāra", "Thich Nhat Hanh", "Pema Chödrön", "The Book of Joy", "Other"] },
+        notes: [{ id: "reading_note", label: "What landed (optional)", ph: "What felt personally important?" }] },
       { id: "before_bed", label: "Before bed",
         hint: "“Regret the behaviour. Don't hate myself. Learn, practise, repeat.”" },
     ],
@@ -164,6 +166,8 @@ function renderChecklist() {
     }
     root.appendChild(sec);
   }
+  // size editable log entries to their content (they're in the DOM now)
+  root.querySelectorAll(".log-text").forEach(autoGrow);
   renderProgress(entry);
 }
 
@@ -239,9 +243,11 @@ function renderItem(item, entry) {
     list.forEach((entryLog, idx) => {
       const row = document.createElement("div");
       row.className = "log-row";
-      row.innerHTML = `<span class="log-time">${hhmm(entryLog.t)}</span><span class="log-text"></span>` +
+      row.innerHTML = `<span class="log-time">${hhmm(entryLog.t)}</span><textarea class="log-text" rows="1"></textarea>` +
         `<button class="log-del" aria-label="delete">×</button>`;
-      row.querySelector(".log-text").textContent = entryLog.text;
+      const lt = row.querySelector(".log-text");
+      lt.value = entryLog.text;
+      lt.addEventListener("input", (e) => { editLog(item.id, idx, e.target.value); autoGrow(e.target); });
       row.querySelector(".log-del").onclick = () => removeLog(item.id, idx);
       ul.appendChild(row);
     });
@@ -312,6 +318,10 @@ function removeLog(id, idx) {
   mutate((e) => { if (e.logs[id]) e.logs[id].splice(idx, 1); });
   renderChecklist();
 }
+function editLog(id, idx, text) {
+  mutate((e) => { if (e.logs[id] && e.logs[id][idx]) e.logs[id][idx].text = text; });
+}
+function autoGrow(el) { el.style.height = "auto"; el.style.height = el.scrollHeight + "px"; }
 function hhmm(iso) {
   try { return new Date(iso).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" }); }
   catch (_) { return ""; }
@@ -531,7 +541,7 @@ const SPEAKING_SCRIPT = [
   "Through the day — any 3/10s you caught? For each: what happened, what did you feel, what did you want? Did you manage a pause?",
   "Evening review: what triggered you? What did you feel? What did you do? What would you do differently? Where did you handle something well?",
   "Four Opponent Powers: what do you regret, what's the remedy or reflection, what will you resolve, what do you rejoice in?",
-  "Did you read any Śāntideva? Anything that landed?",
+  "Did you read anything on emotional regulation / mindfulness (Śāntideva, Thich Nhat Hanh…)? Which book, and anything that landed?",
   "Anything for before bed?",
 ];
 
@@ -551,7 +561,7 @@ function buildAiSpec() {
     if (it.select) {
       const opts = it.select.options.filter(Boolean);
       props[it.select.id] = { type: ["string", "null"], enum: [...opts, null] };
-      guide.push(`${it.select.id} (one of: ${opts.join(", ")}, or null): analytical-meditation theme.`);
+      guide.push(`${it.select.id} (one of: ${opts.join(", ")}, or null): ${it.select.label} for “${it.label}”. Pick the closest option; use "Other" if named but not listed.`);
     }
     if (it.notes) for (const n of it.notes) {
       props[n.id] = { type: ["string", "null"] };
