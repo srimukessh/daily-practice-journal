@@ -54,6 +54,7 @@
 
     <!-- Checklist view -->
     <section id="view-checklist" class="view">
+      <button id="speak-btn" class="speak-btn">🎙️ Speak / paste your whole day</button>
       <div class="progress-wrap">
         <div class="progress-bar"><div id="progress-fill" class="progress-fill"></div></div>
         <div id="progress-text" class="progress-text"></div>
@@ -100,6 +101,7 @@
     </section>
 
     <div id="toast" class="toast hidden"></div>
+    <div id="overlay-root"></div>
   </main>
 
   <!-- Supabase JS (loaded from CDN; app still works offline once cached) -->

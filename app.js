@@ -24,9 +24,9 @@ const SECTIONS = [
       { id: "catch_310", label: "Caught the 3/10", log: true,
         logPh: "A 3/10 you caught — what did you feel / want?",
         hint: "When irritation, fear, defensiveness or anger appears, notice the body first — “What am I feeling? What am I wanting right now?” Add each one through the day. Tap a box and dictate with Wispr." },
-      { id: "one_pause", label: "One pause",
-        hint: "An urge to defend, correct, persuade, message, retaliate or fix — and I didn't act straight away. I let the discomfort exist.",
-        notes: [{ id: "pause_note", label: "The pause (optional)", ph: "What was the urge? What did I do instead?" }] },
+      { id: "one_pause", label: "Pauses", log: true,
+        logPh: "A pause — what was the urge? What did you do instead?",
+        hint: "An urge to defend, correct, persuade, message, retaliate or fix — and you didn't act straight away. You let the discomfort exist. Add each pause through the day." },
     ],
   },
   {
@@ -485,6 +485,7 @@ function onSignedIn(u) {
   setDate(todayYmd());
   pullAll();
   pushDirty();
+  processPending();
 }
 
 // ===== Toast =====
@@ -508,6 +509,193 @@ function exportJson() {
   URL.revokeObjectURL(a.href);
 }
 
+// ===== "Speak through your day" — brain-dump → OpenAI → fields =====
+// A read-aloud guide so you know what to cover while dictating (with Wispr) or typing.
+const SPEAKING_SCRIPT = [
+  "Morning — did you do the 10-minute concentration meditation?",
+  "The analytical meditation: which theme (anger, being misunderstood, unfairness, rejection, attachment, accepting “no”), and what came up in the body?",
+  "Through the day — any 3/10s you caught? For each: what happened, what did you feel, what did you want? Did you manage a pause?",
+  "Evening review: what triggered you? What did you feel? What did you do? What would you do differently? Where did you handle something well?",
+  "Four Opponent Powers: what do you regret, what's the remedy or reflection, what will you resolve, what do you rejoice in?",
+  "Did you read any Śāntideva? Anything that landed?",
+  "Anything for before bed?",
+];
+
+// Build the JSON schema + field guide the model routes into, straight from SECTIONS
+// (single source of truth — edit the checklist and this follows automatically).
+function buildAiSpec() {
+  const props = {}, guide = [];
+  for (const it of ALL_ITEMS) {
+    if (!it.group && !it.log) {
+      props[it.id] = { type: ["boolean", "null"] };
+      guide.push(`${it.id} (boolean): did they do “${it.label}”? null if not mentioned.`);
+    }
+    if (it.group) for (const g of it.group) {
+      props[g.id] = { type: ["boolean", "null"] };
+      guide.push(`${g.id} (boolean): Opponent Power “${g.label}” — did they express it? null if not.`);
+    }
+    if (it.select) {
+      const opts = it.select.options.filter(Boolean);
+      props[it.select.id] = { type: ["string", "null"], enum: [...opts, null] };
+      guide.push(`${it.select.id} (one of: ${opts.join(", ")}, or null): analytical-meditation theme.`);
+    }
+    if (it.notes) for (const n of it.notes) {
+      props[n.id] = { type: ["string", "null"] };
+      guide.push(`${n.id} (string or null): ${n.label}. Use their own words; null if not mentioned.`);
+    }
+    if (it.log) {
+      props[it.id] = { type: ["array", "null"], items: { type: "string" } };
+      guide.push(`${it.id} (array of strings or null): each distinct “${it.label}” they mention — one entry each, including what they felt/wanted.`);
+    }
+  }
+  return {
+    schema: { type: "object", properties: props, required: Object.keys(props), additionalProperties: false },
+    guide: guide.join("\n"),
+  };
+}
+
+// Merge model output into a day, non-destructively: ticks (never un-ticks) checks,
+// fills the theme, appends to notes, and appends new 3/10s.
+function mergeResult(ds, result) {
+  const e = loadEntry(ds);
+  for (const it of ALL_ITEMS) {
+    if (!it.group && !it.log && result[it.id] === true) e.checks[it.id] = true;
+    if (it.group) for (const g of it.group) if (result[g.id] === true) e.checks[g.id] = true;
+    if (it.select && result[it.select.id]) e.notes[it.select.id] = result[it.select.id];
+    if (it.notes) for (const n of it.notes) {
+      const v = result[n.id];
+      if (v && String(v).trim()) {
+        const cur = (e.notes[n.id] || "").trim();
+        e.notes[n.id] = cur ? cur + "\n" + String(v).trim() : String(v).trim();
+      }
+    }
+    if (it.log && Array.isArray(result[it.id])) {
+      for (const s of result[it.id]) if (s && s.trim()) (e.logs[it.id] = e.logs[it.id] || []).push({ t: nowIso(), text: s.trim() });
+    }
+  }
+  e.updated_at = nowIso();
+  storeEntry(ds, e); markDirty(ds); schedulePush();
+}
+
+// Human-readable summary of what a result will change (for the review card).
+function summariseResult(result) {
+  const lines = [];
+  const ticks = ALL_ITEMS.flatMap((it) =>
+    it.group ? it.group.filter((g) => result[g.id] === true).map((g) => g.label)
+             : (!it.log && result[it.id] === true ? [it.label] : []));
+  if (ticks.length) lines.push({ h: "Will tick", b: ticks.join(" · ") });
+  for (const it of ALL_ITEMS) {
+    if (it.select && result[it.select.id]) lines.push({ h: it.select.label, b: result[it.select.id] });
+    if (it.notes) for (const n of it.notes) if (result[n.id] && String(result[n.id]).trim())
+      lines.push({ h: n.label, b: String(result[n.id]).trim() });
+    if (it.log && Array.isArray(result[it.id]) && result[it.id].length)
+      lines.push({ h: it.label, b: result[it.id].map((s) => "• " + s).join("\n") });
+  }
+  return lines;
+}
+
+// Offline queue — dumps captured with no signal, organised on reconnect.
+function getPending() { try { return JSON.parse(localStorage.getItem("dp:pending") || "[]"); } catch (_) { return []; } }
+function queueDump(ds, text) {
+  const q = getPending(); q.push({ ds, text });
+  localStorage.setItem("dp:pending", JSON.stringify(q));
+}
+function setPending(q) { localStorage.setItem("dp:pending", JSON.stringify(q)); }
+
+async function organise(ds, transcript) {
+  if (!sb || !user) throw new Error("not signed in");
+  const { schema, guide } = buildAiSpec();
+  const { data, error } = await sb.functions.invoke("organise", {
+    body: { transcript, schema, guide, dateLabel: prettyDate(ds) },
+  });
+  if (error) throw error;
+  if (data && data.error) throw new Error(data.error);
+  return data.result;
+}
+
+async function processPending() {
+  if (!sb || !user || !navigator.onLine) return;
+  const q = getPending();
+  if (!q.length) return;
+  const left = [];
+  for (const item of q) {
+    try {
+      const result = await organise(item.ds, item.text);
+      mergeResult(item.ds, result);
+      toast(`Organised your ${prettyDate(item.ds)} notes`);
+    } catch (_) { left.push(item); }
+  }
+  setPending(left);
+  renderChecklist();
+}
+
+// ===== Overlays =====
+function buildOverlay(inner) {
+  const root = $("#overlay-root");
+  const ov = document.createElement("div");
+  ov.className = "overlay";
+  ov.innerHTML = `<div class="sheet">${inner}</div>`;
+  ov.addEventListener("click", (e) => { if (e.target === ov) ov.remove(); });
+  root.appendChild(ov);
+  return ov;
+}
+
+function openSpeak() {
+  if (!SYNC_ON) return toast("Add Supabase + OpenAI to enable this (see README)");
+  const script = SPEAKING_SCRIPT.map((s) => `<li>${s}</li>`).join("");
+  const ov = buildOverlay(`
+    <div class="sheet-head"><h2>Speak / paste your day</h2><button class="sheet-x" aria-label="close">×</button></div>
+    <p class="sheet-sub">Talk through these out loud (dictate with Wispr) or type. I'll sort it into the right boxes — you review before it's saved.</p>
+    <ol class="script">${script}</ol>
+    <textarea id="dump" rows="7" placeholder="Tap here, then dictate with Wispr or type your whole day…"></textarea>
+    <div class="sheet-actions">
+      <button class="secondary-btn" id="dump-cancel">Cancel</button>
+      <button class="primary-btn" id="dump-go">Organise into journal</button>
+    </div>`);
+  ov.querySelector(".sheet-x").onclick = () => ov.remove();
+  ov.querySelector("#dump-cancel").onclick = () => ov.remove();
+  ov.querySelector("#dump-go").onclick = async () => {
+    const text = ov.querySelector("#dump").value.trim();
+    if (!text) return toast("Nothing to organise yet");
+    ov.remove();
+    if (!navigator.onLine || !user) { queueDump(currentDs, text); return toast("Saved — will organise when online"); }
+    const load = buildOverlay(`<div class="loading"><div class="spinner"></div><p>Organising your day…</p></div>`);
+    try {
+      const result = await organise(currentDs, text);
+      load.remove();
+      showReview(currentDs, result);
+    } catch (err) {
+      load.remove();
+      queueDump(currentDs, text);
+      toast("Couldn't reach AI — saved, will retry when online");
+      console.warn("organise failed", err);
+    }
+  };
+  setTimeout(() => ov.querySelector("#dump").focus(), 50);
+}
+
+function showReview(ds, result) {
+  const lines = summariseResult(result);
+  const body = lines.length
+    ? lines.map((l) => `<div class="rev-row"><div class="rev-h">${l.h}</div><div class="rev-b"></div></div>`).join("")
+    : `<p class="sheet-sub">I couldn't pull anything structured from that. Try adding more detail.</p>`;
+  const ov = buildOverlay(`
+    <div class="sheet-head"><h2>Here's what I understood</h2><button class="sheet-x" aria-label="close">×</button></div>
+    <div class="review">${body}</div>
+    <div class="sheet-actions">
+      <button class="secondary-btn" id="rev-discard">Discard</button>
+      <button class="primary-btn" id="rev-apply">Apply to ${prettyDate(ds)}</button>
+    </div>`);
+  // set text content safely (avoid HTML injection from transcript)
+  const rows = ov.querySelectorAll(".rev-row");
+  lines.forEach((l, i) => { rows[i].querySelector(".rev-b").textContent = l.b; });
+  ov.querySelector(".sheet-x").onclick = () => ov.remove();
+  ov.querySelector("#rev-discard").onclick = () => ov.remove();
+  ov.querySelector("#rev-apply").onclick = () => {
+    mergeResult(ds, result); renderChecklist(); ov.remove(); toast("Added to your journal");
+  };
+}
+
 // ===== Wire up UI =====
 function bindEvents() {
   document.querySelectorAll(".tab").forEach((t) => t.onclick = () => switchView(t.dataset.view));
@@ -518,6 +706,7 @@ function bindEvents() {
   $("#cal-prev").onclick = () => { calCursor.setMonth(calCursor.getMonth() - 1); renderCalendar(); };
   $("#cal-next").onclick = () => { calCursor.setMonth(calCursor.getMonth() + 1); renderCalendar(); };
 
+  $("#speak-btn").onclick = openSpeak;
   $("#export-btn").onclick = exportJson;
   $("#sync-now").onclick = syncNow;
   $("#signout-btn").onclick = async () => { if (sb) await sb.auth.signOut(); location.reload(); };
@@ -552,7 +741,7 @@ function bindEvents() {
   };
 
   // connectivity + lifecycle
-  window.addEventListener("online", () => { setSyncState("syncing…"); pushDirty().then(pullAll); });
+  window.addEventListener("online", () => { setSyncState("syncing…"); pushDirty().then(pullAll).then(processPending); });
   window.addEventListener("offline", () => setSyncState("offline — saved on device"));
   document.addEventListener("visibilitychange", () => {
     if (!document.hidden) { scheduleReminders(); if (user) pullAll(); }
@@ -567,5 +756,9 @@ function bindEvents() {
   scheduleReminders();
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("service-worker.js").catch((e) => console.warn("SW reg failed", e));
+  }
+  // test hook (harmless; only active with ?__test in the URL)
+  if (location.search.includes("__test")) {
+    window.__t = { buildAiSpec, mergeResult, summariseResult, loadEntry, ALL_ITEMS, SPEAKING_SCRIPT };
   }
 })();
