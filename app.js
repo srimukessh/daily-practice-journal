@@ -21,8 +21,9 @@ const SECTIONS = [
   {
     title: "Through the day",
     items: [
-      { id: "catch_310", label: "Caught the 3/10",
-        hint: "When irritation, fear, defensiveness or anger appeared, I noticed the body first — “What am I feeling? What am I wanting right now?”" },
+      { id: "catch_310", label: "Caught the 3/10", log: true,
+        logPh: "A 3/10 you caught — what did you feel / want?",
+        hint: "When irritation, fear, defensiveness or anger appears, notice the body first — “What am I feeling? What am I wanting right now?” Add each one through the day. Tap a box and dictate with Wispr." },
       { id: "one_pause", label: "One pause",
         hint: "An urge to defend, correct, persuade, message, retaliate or fix — and I didn't act straight away. I let the discomfort exist.",
         notes: [{ id: "pause_note", label: "The pause (optional)", ph: "What was the urge? What did I do instead?" }] },
@@ -85,8 +86,14 @@ function prettyDate(ds) {
 const LKEY = (ds) => `dp:entry:${ds}`;
 function loadEntry(ds) {
   const raw = localStorage.getItem(LKEY(ds));
-  if (raw) { try { return JSON.parse(raw); } catch (_) {} }
-  return { checks: {}, notes: {}, updated_at: null };
+  if (raw) {
+    try {
+      const e = JSON.parse(raw);
+      if (!e.logs) e.logs = {};   // back-compat for entries saved before logs existed
+      return e;
+    } catch (_) {}
+  }
+  return { checks: {}, notes: {}, logs: {}, updated_at: null };
 }
 function storeEntry(ds, entry) { localStorage.setItem(LKEY(ds), JSON.stringify(entry)); }
 function allLocalDates() {
@@ -105,6 +112,7 @@ function clearDirty(ds) {
 
 // ===== Completion / streak math =====
 function itemDone(item, entry) {
+  if (item.log) return (entry.logs[item.id] || []).length > 0;
   if (item.group) return item.group.every((g) => entry.checks[g.id]);
   return !!entry.checks[item.id];
 }
@@ -168,7 +176,7 @@ function renderItem(item, entry) {
   const head = document.createElement("div");
   head.className = "item-head";
 
-  if (!item.group) {
+  if (!item.group && !item.log) {
     const box = document.createElement("button");
     box.className = "check" + (entry.checks[item.id] ? " on" : "");
     box.innerHTML = CHECK_SVG;
@@ -211,6 +219,35 @@ function renderItem(item, entry) {
     el.appendChild(chips);
   }
 
+  // running log (e.g. 3/10s caught through the day)
+  if (item.log) {
+    const list = entry.logs[item.id] || [];
+    const wrap = document.createElement("div");
+    wrap.className = "log";
+    const ul = document.createElement("div");
+    ul.className = "log-list";
+    list.forEach((entryLog, idx) => {
+      const row = document.createElement("div");
+      row.className = "log-row";
+      row.innerHTML = `<span class="log-time">${hhmm(entryLog.t)}</span><span class="log-text"></span>` +
+        `<button class="log-del" aria-label="delete">×</button>`;
+      row.querySelector(".log-text").textContent = entryLog.text;
+      row.querySelector(".log-del").onclick = () => removeLog(item.id, idx);
+      ul.appendChild(row);
+    });
+    const add = document.createElement("div");
+    add.className = "log-add";
+    add.innerHTML = `<input type="text" class="log-input" placeholder="${item.logPh || "Add one…"}" ` +
+      `enterkeyhint="done" />` + `<button class="log-add-btn">Add</button>`;
+    const input = add.querySelector(".log-input");
+    const submit = () => { addLog(item.id, input.value); };
+    add.querySelector(".log-add-btn").onclick = submit;
+    input.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); submit(); } });
+    wrap.appendChild(ul);
+    wrap.appendChild(add);
+    el.appendChild(wrap);
+  }
+
   // text notes
   if (item.notes) {
     for (const n of item.notes) {
@@ -251,6 +288,20 @@ function toggleCheck(id) {
 function setNote(id, val, silent) {
   mutate((e) => { e.notes[id] = val; });
   if (!silent) renderChecklist();
+}
+function addLog(id, text) {
+  const t = (text || "").trim();
+  if (!t) return;
+  mutate((e) => { (e.logs[id] = e.logs[id] || []).push({ t: nowIso(), text: t }); });
+  renderChecklist();
+}
+function removeLog(id, idx) {
+  mutate((e) => { if (e.logs[id]) e.logs[id].splice(idx, 1); });
+  renderChecklist();
+}
+function hhmm(iso) {
+  try { return new Date(iso).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" }); }
+  catch (_) { return ""; }
 }
 
 // ===== Views / tabs =====
@@ -362,7 +413,7 @@ async function pushDirty() {
       const e = loadEntry(ds);
       const { error } = await sb.from("entries").upsert({
         user_id: user.id, entry_date: ds,
-        data: { checks: e.checks, notes: e.notes },
+        data: { checks: e.checks, notes: e.notes, logs: e.logs || {} },
         updated_at: e.updated_at || nowIso(),
       }, { onConflict: "user_id,entry_date" });
       if (error) throw error;
@@ -387,7 +438,7 @@ async function pullAll() {
       const remoteTime = row.updated_at ? Date.parse(row.updated_at) : 0;
       const localTime = local.updated_at ? Date.parse(local.updated_at) : 0;
       if (remoteTime >= localTime) {
-        storeEntry(ds, { checks: row.data.checks || {}, notes: row.data.notes || {}, updated_at: row.updated_at });
+        storeEntry(ds, { checks: row.data.checks || {}, notes: row.data.notes || {}, logs: row.data.logs || {}, updated_at: row.updated_at });
       }
     }
     setSyncState("synced");
