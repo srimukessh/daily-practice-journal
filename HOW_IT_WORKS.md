@@ -42,7 +42,7 @@ flowchart TB
   end
 
   subgraph Supabase["🟢 Supabase — your backend"]
-    Auth["Auth<br/>magic-link login → JWT"]
+    Auth["Auth<br/>email+password login → JWT"]
     DB[("PostgreSQL<br/>table: entries<br/>🔒 Row-Level Security ON")]
     Edge["Edge Function: organise<br/>🔑 holds the OpenAI key"]
   end
@@ -92,8 +92,8 @@ delivery, nothing more. (This is why making it "public" is harmless — see §6.
 
 ### Supabase = login + memory
 Two jobs:
-1. **Auth** — handles "who are you?" via a magic link (no passwords). On success it gives your
-   browser a **JWT** (a signed token that proves "I am Kesh" for a while).
+1. **Auth** — handles "who are you?" via **email + password** (we moved off magic links — see §6.4).
+   On success it gives your browser a **JWT** (a signed token that proves "I am Kesh" for a while).
 2. **Database** — a real PostgreSQL database that stores your entries. Plus one small
    **Edge Function** (serverless code) called `organise` that talks to OpenAI.
 
@@ -226,12 +226,22 @@ the internet with the public anon key, an anonymous request sees **zero rows**. 
 into *their* account sees *their* rows, never yours. The database itself refuses — it's not a check
 we do in app code that could be bypassed.
 
-### 6.4 Login: magic link → JWT
+### 6.4 Login: email + password → JWT (and yes, JWT is still here)
 
-You type your email → Supabase emails a one-time link → clicking it proves you own that inbox →
-Supabase hands your browser a **JWT** (a signed "this is Kesh until it expires" token). Every request
-to the DB or the Edge Function carries that JWT, and that's what `auth.uid()` reads. No passwords to
-leak. The weak point becomes *your email inbox* — standard, and fine.
+**What changed:** we dropped magic links and now log in with **email + password**. You pick a password
+once and it creates your account — *no email is sent at all*. The same email + password on every device
+logs into the same account, so your journal syncs.
+
+**Why we switched:** magic links are broken *specifically inside an installed iPhone PWA*. Tapping the
+link in Mail opens it in **Safari**, not your home-screen app — and on iOS those two have **separate
+storage**, so the session never reached the app. That was a limitation of *magic-link delivery on iOS*,
+nothing to do with JWTs or the PWA itself. (It also kept hitting Supabase's built-in-email rate limit.)
+
+**Important — we still use JWT.** A JWT (JSON Web Token) is just the signed session token you get
+*after* logging in. Password login → Supabase hands your browser a JWT → every request to the database
+and the Edge Functions carries it, and that's what `auth.uid()` reads to enforce Row-Level Security. We
+only changed *how you prove who you are* (a password instead of an email link); the token representing
+your session is still a JWT.
 
 ### 6.5 The Edge Function is locked too
 
@@ -275,7 +285,7 @@ your Supabase database.
 | Vercel Deployment Protection (login-wall on site) | **OFF** | It's a public app; the wall would block your phone. No secrets in the app, so it's safe. |
 | Supabase Row-Level Security on `entries` | **ON** | The real lock — each user sees only their own rows. |
 | RLS policies (select/insert/update/delete) | **4, all `auth.uid() = user_id`** | Full CRUD, always scoped to you. |
-| Supabase email auth (magic link) | **ON** | Passwordless login. |
+| Supabase email + password auth | **ON** | Works inside the installed PWA; sends no email. |
 | Edge Function JWT verification | **ON** | Only logged-in you can spend OpenAI credit. |
 | OpenAI key exposure | **Server-only secret** | Never shipped to the browser. |
 | `.env` (DB password, access token, OpenAI key) | **Gitignored, local only** | Never committed or deployed. |
