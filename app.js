@@ -860,18 +860,38 @@ function bindEvents() {
     } else toast("Notifications blocked");
   };
 
-  // auth form
+  // auth form — email + password (works inside the installed PWA; no email/magic-link needed).
+  // Tries to sign in; if the account doesn't exist yet, creates it with that password.
   $("#auth-form").onsubmit = async (e) => {
     e.preventDefault();
     if (!sb) return;
     const email = $("#email").value.trim();
-    const btn = $("#auth-btn");
-    btn.disabled = true; $("#auth-msg").textContent = "Sending…";
-    const { error } = await sb.auth.signInWithOtp({
-      email, options: { emailRedirectTo: location.origin + location.pathname },
-    });
-    btn.disabled = false;
-    $("#auth-msg").textContent = error ? ("Error: " + error.message) : "Check your email for the sign-in link.";
+    const password = $("#password").value;
+    const btn = $("#auth-btn"), msg = $("#auth-msg");
+    btn.disabled = true; msg.textContent = "Signing in…";
+    try {
+      let { error } = await sb.auth.signInWithPassword({ email, password });
+      if (error && /invalid login credentials/i.test(error.message)) {
+        // no such account (or wrong password) — try to create it
+        msg.textContent = "Creating your account…";
+        const up = await sb.auth.signUp({ email, password });
+        if (up.error) {
+          msg.textContent = /already registered/i.test(up.error.message)
+            ? "Wrong password for this email — try again."
+            : "Error: " + up.error.message;
+          return;
+        }
+        // no session back = either an existing account (wrong password) or confirmation required
+        if (!up.data.session) { msg.textContent = "Check your password and try again."; return; }
+        error = null;
+      } else if (error) {
+        msg.textContent = "Error: " + error.message; return;
+      }
+      msg.textContent = "";
+      // onAuthStateChange handles showing the app
+    } finally {
+      btn.disabled = false;
+    }
   };
 
   // connectivity + lifecycle

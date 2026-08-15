@@ -27,10 +27,12 @@
       <form id="auth-form">
         <input id="email" type="email" inputmode="email" autocomplete="email"
                placeholder="you@example.com" required />
-        <button type="submit" id="auth-btn">Send magic link</button>
+        <input id="password" type="password" autocomplete="current-password"
+               placeholder="password" required minlength="6" />
+        <button type="submit" id="auth-btn">Sign in</button>
       </form>
       <p id="auth-msg" class="auth-msg"></p>
-      <p class="auth-note">You'll get a one-time link by email. No password.</p>
+      <p class="auth-note">First time on this email? Just pick a password — it creates your account. Same email + password on every device to sync.</p>
     </div>
   </section>
 
