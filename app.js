@@ -9,6 +9,9 @@ const SECTIONS = [
   {
     title: "Morning",
     items: [
+      { id: "intention", label: "Set intention",
+        hint: "Take a moment — what do you want to be mindful of today?",
+        notes: [{ id: "intention_note", label: "Today's intention (optional)", ph: "What do I want to be mindful of today?" }] },
       { id: "concentration", label: "Concentration meditation", minutes: true,
         hint: "Focus on the breath. When the mind wanders, notice it and gently return." },
       { id: "analytical", label: "Analytical meditation", minutes: true,
@@ -30,23 +33,16 @@ const SECTIONS = [
   {
     title: "Evening review",
     items: [
-      { id: "review", label: "5–10 min review",
+      { id: "review", label: "Evening review",
+        hint: "Work through what was hard today — the first three Opponent Powers.",
         notes: [
-          { id: "review_triggered", label: "What triggered me?", ph: "" },
-          { id: "review_felt", label: "What did I feel?", ph: "" },
-          { id: "review_did", label: "What did I do?", ph: "" },
-          { id: "review_diff", label: "What would I do differently?", ph: "" },
-          { id: "review_well", label: "Where did I handle something well?", ph: "" },
+          { id: "regret", label: "Regret", ph: "What was unhelpful today — what did I do, feel, want?" },
+          { id: "remedy", label: "Remedy / reflection", ph: "The antidote — e.g. it's not about me; what actually helps." },
+          { id: "resolve", label: "Resolve", ph: "How will I respond differently next time?" },
         ] },
-      { id: "opponent_powers", label: "Four Opponent Powers",
-        hint: "Regret what was unhelpful → remedy / reflection → resolve to respond differently → rejoice in what you did well.",
-        group: [
-          { id: "power_regret", label: "Regret" },
-          { id: "power_remedy", label: "Remedy" },
-          { id: "power_resolve", label: "Resolve" },
-          { id: "power_rejoice", label: "Rejoice" },
-        ],
-        notes: [{ id: "powers_note", label: "Notes (optional)", ph: "" }] },
+      { id: "rejoice", label: "Rejoice", accent: "warm",
+        hint: "The fourth Opponent Power — appreciate what you did well.",
+        notes: [{ id: "rejoice_note", label: "What did I handle well today?", ph: "" }] },
       { id: "reading", label: "Reading",
         hint: "Something on emotional regulation / mindfulness. Read slowly; stop when something feels personally important and reflect on it, rather than finishing the chapter.",
         select: { id: "reading_book", label: "Book",
@@ -174,7 +170,7 @@ function renderChecklist() {
 function renderItem(item, entry) {
   const el = document.createElement("div");
   const done = itemDone(item, entry);
-  el.className = "item" + (done ? " done" : "");
+  el.className = "item" + (done ? " done" : "") + (item.accent ? " item-" + item.accent : "");
 
   const head = document.createElement("div");
   head.className = "item-head";
@@ -536,11 +532,12 @@ function exportJson() {
 // ===== "Speak through your day" — brain-dump → OpenAI → fields =====
 // A read-aloud guide so you know what to cover while dictating (with Wispr) or typing.
 const SPEAKING_SCRIPT = [
-  "Morning — did you do the 10-minute concentration meditation?",
-  "The analytical meditation: which theme (anger, being misunderstood, unfairness, rejection, attachment, accepting “no”), and what came up in the body?",
-  "Through the day — any 3/10s you caught? For each: what happened, what did you feel, what did you want? Did you manage a pause?",
-  "Evening review: what triggered you? What did you feel? What did you do? What would you do differently? Where did you handle something well?",
-  "Four Opponent Powers: what do you regret, what's the remedy or reflection, what will you resolve, what do you rejoice in?",
+  "Morning intention — what do you want to be mindful of today?",
+  "Concentration meditation — did you do it, and for how many minutes?",
+  "Analytical meditation: which theme (anger, being misunderstood, unfairness, rejection, attachment, accepting “no”), how many minutes, and what came up in the body?",
+  "Through the day — any 3/10s you caught? For each: what happened, what did you feel, what did you want? Any pauses where you didn't act on an urge?",
+  "Evening review — Regret: what was unhelpful today? Remedy: the antidote / reflection. Resolve: how will you respond differently?",
+  "Rejoice: what did you handle well today?",
   "Did you read anything on emotional regulation / mindfulness (Śāntideva, Thich Nhat Hanh…)? Which book, and anything that landed?",
   "Anything for before bed?",
 ];

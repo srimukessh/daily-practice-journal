@@ -179,6 +179,14 @@ button { font-family: inherit; cursor: pointer; }
 .item.done .item-label { color: var(--muted); text-decoration: line-through; text-decoration-color: var(--line); }
 .item-hint { font-size: .84rem; color: var(--muted); margin-top: 2px; }
 
+/* Rejoice — warm, appreciative accent so it reads differently from the "work through it" fields */
+.item-warm {
+  border-color: #f0c674;
+  border-left: 4px solid #e8a13a;
+  background: linear-gradient(180deg, rgba(240,182,60,.10), rgba(240,182,60,.03));
+}
+.item-warm .item-label::before { content: "✨ "; }
+
 /* minutes box on the right of an item */
 .mins { flex: 0 0 auto; display: flex; align-items: center; gap: 5px; margin-left: 10px; margin-top: 1px; }
 .mins-input {
