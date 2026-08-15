@@ -6,3 +6,4 @@ node_modules/
 
 # supabase CLI local state
 supabase/.temp/
+.vercel

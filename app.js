@@ -486,6 +486,7 @@ function onSignedIn(u) {
   pullAll();
   pushDirty();
   processPending();
+  processPendingRecordings();
 }
 
 // ===== Toast =====
@@ -629,6 +630,83 @@ async function processPending() {
   renderChecklist();
 }
 
+// ===== Offline voice notes (audio recorded with no signal → transcribed on reconnect) =====
+// Audio blobs are too big for localStorage, so they live in IndexedDB.
+const IDB_NAME = "dp-audio", IDB_STORE = "recordings";
+function idbOpen() {
+  return new Promise((res, rej) => {
+    const r = indexedDB.open(IDB_NAME, 1);
+    r.onupgradeneeded = () => r.result.createObjectStore(IDB_STORE, { keyPath: "id", autoIncrement: true });
+    r.onsuccess = () => res(r.result);
+    r.onerror = () => rej(r.error);
+  });
+}
+async function idbAdd(rec) {
+  const db = await idbOpen();
+  return new Promise((res, rej) => {
+    const tx = db.transaction(IDB_STORE, "readwrite");
+    tx.objectStore(IDB_STORE).add(rec);
+    tx.oncomplete = res; tx.onerror = () => rej(tx.error);
+  });
+}
+async function idbAll() {
+  const db = await idbOpen();
+  return new Promise((res, rej) => {
+    const out = [];
+    const cur = db.transaction(IDB_STORE, "readonly").objectStore(IDB_STORE).openCursor();
+    cur.onsuccess = () => { const c = cur.result; if (c) { out.push({ key: c.key, ...c.value }); c.continue(); } else res(out); };
+    cur.onerror = () => rej(cur.error);
+  });
+}
+async function idbDelete(key) {
+  const db = await idbOpen();
+  return new Promise((res, rej) => {
+    const tx = db.transaction(IDB_STORE, "readwrite");
+    tx.objectStore(IDB_STORE).delete(key);
+    tx.oncomplete = res; tx.onerror = () => rej(tx.error);
+  });
+}
+
+function pickAudioMime() {
+  const cands = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/aac", "audio/ogg;codecs=opus"];
+  for (const c of cands) if (window.MediaRecorder && MediaRecorder.isTypeSupported(c)) return c;
+  return "";
+}
+function mimeExt(mime) {
+  if (!mime) return "webm";
+  if (mime.includes("webm")) return "webm";
+  if (mime.includes("mp4")) return "m4a";
+  if (mime.includes("aac")) return "m4a";
+  if (mime.includes("ogg")) return "ogg";
+  return "webm";
+}
+
+async function transcribeBlob(blob, mime) {
+  if (!sb || !user) throw new Error("not signed in");
+  const form = new FormData();
+  form.append("file", blob, "note." + mimeExt(mime || blob.type));
+  const { data, error } = await sb.functions.invoke("transcribe", { body: form });
+  if (error) throw error;
+  if (data && data.error) throw new Error(data.error);
+  return data.text || "";
+}
+
+// On reconnect/login: transcribe each stored voice note, organise it, merge (non-destructive), drop it.
+async function processPendingRecordings() {
+  if (!sb || !user || !navigator.onLine) return;
+  let recs;
+  try { recs = await idbAll(); } catch (_) { return; }
+  for (const r of recs) {
+    try {
+      const text = await transcribeBlob(r.blob, r.mime);
+      if (text.trim()) { mergeResult(r.ds, await organise(r.ds, text)); }
+      await idbDelete(r.key);
+      toast(`Organised your voice note from ${prettyDate(r.ds)}`);
+    } catch (_) { /* keep for next retry */ }
+  }
+  renderChecklist();
+}
+
 // ===== Overlays =====
 function buildOverlay(inner) {
   const root = $("#overlay-root");
@@ -645,15 +723,17 @@ function openSpeak() {
   const script = SPEAKING_SCRIPT.map((s) => `<li>${s}</li>`).join("");
   const ov = buildOverlay(`
     <div class="sheet-head"><h2>Speak / paste your day</h2><button class="sheet-x" aria-label="close">×</button></div>
-    <p class="sheet-sub">Talk through these out loud (dictate with Wispr) or type. I'll sort it into the right boxes — you review before it's saved.</p>
+    <p class="sheet-sub">Record here, dictate with Wispr, or type. I'll sort it into the right boxes — you review before it's saved. Recording works offline; it transcribes when you're back online.</p>
     <ol class="script">${script}</ol>
-    <textarea id="dump" rows="7" placeholder="Tap here, then dictate with Wispr or type your whole day…"></textarea>
+    <div class="rec-row"><button class="rec-btn" id="rec-btn">🎙️ Record</button><span class="rec-time" id="rec-time"></span></div>
+    <textarea id="dump" rows="6" placeholder="…or dictate with Wispr / type here"></textarea>
     <div class="sheet-actions">
       <button class="secondary-btn" id="dump-cancel">Cancel</button>
       <button class="primary-btn" id="dump-go">Organise into journal</button>
     </div>`);
   ov.querySelector(".sheet-x").onclick = () => ov.remove();
   ov.querySelector("#dump-cancel").onclick = () => ov.remove();
+  attachRecorder(ov);
   ov.querySelector("#dump-go").onclick = async () => {
     const text = ov.querySelector("#dump").value.trim();
     if (!text) return toast("Nothing to organise yet");
@@ -672,6 +752,60 @@ function openSpeak() {
     }
   };
   setTimeout(() => ov.querySelector("#dump").focus(), 50);
+}
+
+// Wire the 🎙️ Record button inside the speak overlay.
+function attachRecorder(ov) {
+  const recBtn = ov.querySelector("#rec-btn");
+  const recTime = ov.querySelector("#rec-time");
+  if (!recBtn) return;
+  if (!(navigator.mediaDevices && window.MediaRecorder)) { recBtn.style.display = "none"; return; }
+
+  let rec = null, chunks = [], timer = null, secs = 0, mime = "";
+
+  async function start() {
+    let stream;
+    try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
+    catch (_) { return toast("Microphone permission needed"); }
+    mime = pickAudioMime();
+    rec = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
+    mime = rec.mimeType || mime;
+    chunks = [];
+    rec.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
+    rec.onstop = async () => {
+      stream.getTracks().forEach((t) => t.stop());
+      clearInterval(timer);
+      recBtn.classList.remove("recording"); recBtn.textContent = "🎙️ Record";
+      await handle(new Blob(chunks, { type: mime || "audio/webm" }));
+    };
+    rec.start();
+    secs = 0; recTime.textContent = "0:00";
+    recBtn.textContent = "⏹ Stop"; recBtn.classList.add("recording");
+    timer = setInterval(() => { secs++; recTime.textContent = `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, "0")}`; }, 1000);
+  }
+
+  async function handle(blob) {
+    // Offline (or signed out): stash the audio; it transcribes + organises on reconnect.
+    if (!navigator.onLine || !user) {
+      try { await idbAdd({ ds: currentDs, mime: blob.type, blob, created: nowIso() }); } catch (_) {}
+      ov.remove();
+      return toast("Voice note saved — will organise when back online");
+    }
+    // Online: transcribe now and drop the text into the box for you to review + Organise.
+    recBtn.disabled = true; recTime.textContent = "transcribing…";
+    try {
+      const text = await transcribeBlob(blob, blob.type);
+      const ta = ov.querySelector("#dump");
+      ta.value = ta.value.trim() ? ta.value.trim() + "\n" + text : text;
+      recTime.textContent = "✓ transcribed — review & Organise";
+    } catch (_) {
+      try { await idbAdd({ ds: currentDs, mime: blob.type, blob, created: nowIso() }); } catch (_) {}
+      recTime.textContent = "saved for later";
+      toast("Couldn't transcribe now — saved, will retry when online");
+    } finally { recBtn.disabled = false; }
+  }
+
+  recBtn.onclick = () => { (rec && rec.state === "recording") ? rec.stop() : start(); };
 }
 
 function showReview(ds, result) {
@@ -741,7 +875,7 @@ function bindEvents() {
   };
 
   // connectivity + lifecycle
-  window.addEventListener("online", () => { setSyncState("syncing…"); pushDirty().then(pullAll).then(processPending); });
+  window.addEventListener("online", () => { setSyncState("syncing…"); pushDirty().then(pullAll).then(processPending).then(processPendingRecordings); });
   window.addEventListener("offline", () => setSyncState("offline — saved on device"));
   document.addEventListener("visibilitychange", () => {
     if (!document.hidden) { scheduleReminders(); if (user) pullAll(); }
@@ -752,13 +886,13 @@ function bindEvents() {
 (async function boot() {
   bindEvents();
   setDate(todayYmd());
+  // test hook (harmless; only active with ?__test in the URL) — set before async auth so tests don't race it
+  if (location.search.includes("__test")) {
+    window.__t = { buildAiSpec, mergeResult, summariseResult, loadEntry, ALL_ITEMS, SPEAKING_SCRIPT, openSpeak, transcribeBlob };
+  }
   await initAuth();
   scheduleReminders();
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("service-worker.js").catch((e) => console.warn("SW reg failed", e));
-  }
-  // test hook (harmless; only active with ?__test in the URL)
-  if (location.search.includes("__test")) {
-    window.__t = { buildAiSpec, mergeResult, summariseResult, loadEntry, ALL_ITEMS, SPEAKING_SCRIPT };
   }
 })();

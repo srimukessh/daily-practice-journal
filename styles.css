@@ -123,6 +123,15 @@ button { font-family: inherit; cursor: pointer; }
 .sheet-actions { display: flex; gap: 10px; margin-top: 14px; }
 .sheet-actions button { flex: 1; }
 .primary-btn { border: 0; background: var(--indigo); color: #fff; border-radius: 12px; padding: 13px; font-weight: 700; }
+.rec-row { display: flex; align-items: center; gap: 12px; margin: 12px 0 6px; }
+.rec-btn {
+  border: 0; background: var(--indigo-soft); color: var(--indigo); font-weight: 700;
+  padding: 12px 18px; border-radius: 12px; font-size: .95rem;
+}
+.rec-btn.recording { background: #dc2626; color: #fff; animation: rec-pulse 1.2s ease-in-out infinite; }
+.rec-btn:disabled { opacity: .6; }
+.rec-time { color: var(--muted); font-variant-numeric: tabular-nums; font-size: .9rem; }
+@keyframes rec-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .55; } }
 .loading { text-align: center; padding: 30px 10px; }
 .spinner {
   width: 34px; height: 34px; margin: 0 auto 12px; border-radius: 50%;
