@@ -205,6 +205,10 @@ button { font-family: inherit; cursor: pointer; }
 .mins-input::-webkit-outer-spin-button, .mins-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 .mins-input:focus { border-color: var(--indigo); background: var(--field-strong); }
 .mins-unit { font-size: .78rem; color: var(--muted); }
+.sleep-flag { font-size: .82rem; font-weight: 600; margin-top: 10px; }
+.sleep-flag:empty { display: none; }
+.sleep-flag.low { color: #d97706; }
+.sleep-flag.ok { color: var(--good); }
 .rev-min {
   width: 100px; border: 1px solid var(--line); border-radius: 10px; padding: 9px 10px;
   font: inherit; font-size: .92rem; background: var(--field); color: var(--ink); outline: none;

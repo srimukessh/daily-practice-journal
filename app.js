@@ -9,8 +9,8 @@ const SECTIONS = [
   {
     title: "Morning",
     items: [
-      { id: "intention", label: "Set intention",
-        hint: "Take a moment — what do you want to be mindful of today?",
+      { id: "intention", label: "Set intention", sleep: true,
+        hint: "Take a moment — what do you want to be mindful of today? Log your sleep: under 7h, go easy on alcohol today.",
         notes: [{ id: "intention_note", label: "Today's intention (optional)", ph: "What do I want to be mindful of today?" }] },
       { id: "concentration", label: "Concentration meditation", minutes: true,
         hint: "Focus on the breath. When the mind wanders, notice it and gently return." },
@@ -56,6 +56,7 @@ const SECTIONS = [
 
 const ALL_ITEMS = SECTIONS.flatMap((s) => s.items);
 const TOTAL_ITEMS = ALL_ITEMS.length;
+const SLEEP_MIN = 7; // hours; under this = "go easy on alcohol today"
 
 // ===== Small helpers =====
 const $ = (sel) => document.querySelector(sel);
@@ -207,7 +208,30 @@ function renderItem(item, entry) {
     inp.addEventListener("input", (e) => setMin(item.id, e.target.value));
     head.appendChild(m);
   }
-  el.appendChild(head);
+
+  // sleep: hours-slept box (right) + a live "go easy on alcohol" flag
+  if (item.sleep) {
+    const s = document.createElement("div");
+    s.className = "mins";
+    s.innerHTML = `<input type="number" min="0" max="24" step="0.5" inputmode="decimal" class="mins-input" aria-label="hours slept" /><span class="mins-unit">h sleep</span>`;
+    const inp = s.querySelector("input");
+    inp.value = entry.mins.sleep || "";
+    head.appendChild(s);
+    el.appendChild(head);
+    const flag = document.createElement("div");
+    flag.className = "sleep-flag";
+    el.appendChild(flag);
+    const paint = (v) => {
+      const n = parseFloat(v);
+      if (v === "" || isNaN(n)) { flag.textContent = ""; flag.className = "sleep-flag"; }
+      else if (n < SLEEP_MIN) { flag.textContent = `😴 Under ${SLEEP_MIN}h — go easy on alcohol today.`; flag.className = "sleep-flag low"; }
+      else { flag.textContent = `✓ Rested (${n}h).`; flag.className = "sleep-flag ok"; }
+    };
+    paint(inp.value);
+    inp.addEventListener("input", (e) => { setMin("sleep", e.target.value); paint(e.target.value); });
+  } else {
+    el.appendChild(head);
+  }
 
   // theme select
   if (item.select) {
@@ -611,6 +635,10 @@ function buildAiSpec() {
       props[it.id + "_min"] = { type: ["integer", "null"] };
       guide.push(`${it.id}_min (integer or null): how many minutes of “${it.label}” they did, if stated.`);
     }
+    if (it.sleep) {
+      props["sleep_hours"] = { type: ["number", "null"] };
+      guide.push(`sleep_hours (number or null): how many hours they slept last night, if stated.`);
+    }
   }
   return {
     schema: { type: "object", properties: props, required: Object.keys(props), additionalProperties: false },
@@ -639,6 +667,10 @@ function mergeResult(ds, result) {
     if (it.minutes) {
       const mv = result[it.id + "_min"];
       if (mv !== null && mv !== undefined && mv !== "") e.mins[it.id] = String(mv);
+    }
+    if (it.sleep) {
+      const sv = result["sleep_hours"];
+      if (sv !== null && sv !== undefined && sv !== "") e.mins.sleep = String(sv);
     }
   }
   e.updated_at = nowIso();
@@ -890,6 +922,8 @@ function showReview(ds, result) {
       fields.push({ kind: "log", id: it.id, label: it.label + " (one per line)", value: result[it.id].join("\n") });
     if (it.minutes && result[it.id + "_min"] != null && result[it.id + "_min"] !== "")
       fields.push({ kind: "min", id: it.id + "_min", label: it.label + " (minutes)", value: String(result[it.id + "_min"]) });
+    if (it.sleep && result["sleep_hours"] != null && result["sleep_hours"] !== "")
+      fields.push({ kind: "min", id: "sleep_hours", label: "Hours slept", value: String(result["sleep_hours"]) });
   }
 
   const hasAny = checks.length || fields.length;

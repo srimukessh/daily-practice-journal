@@ -31,6 +31,14 @@ function hmToMinutes(hm: string): number | null {
   const m = /^(\d{1,2}):(\d{2})$/.exec(hm || "");
   return m ? (+m[1]) * 60 + (+m[2]) : null;
 }
+function localDate(tz: string): string {
+  const p = new Intl.DateTimeFormat("en-CA", {
+    timeZone: tz || "UTC", year: "numeric", month: "2-digit", day: "2-digit",
+  }).formatToParts(new Date());
+  const g = (t: string) => p.find((x) => x.type === t)?.value ?? "";
+  return `${g("year")}-${g("month")}-${g("day")}`;
+}
+const SLEEP_MIN = 7;
 
 Deno.serve(async (req: Request) => {
   const url = new URL(req.url);
@@ -72,10 +80,20 @@ Deno.serve(async (req: Request) => {
     if (!due.length) continue;
 
     for (const key of due) {
+      let body = MESSAGES[key];
+      // Evening: if they logged under-7h sleep today, add the alcohol nudge.
+      if (key === "evening") {
+        const { data: ent } = await supabase.from("entries")
+          .select("data").eq("user_id", row.user_id).eq("entry_date", localDate(row.tz)).maybeSingle();
+        const sleep = parseFloat(ent?.data?.mins?.sleep);
+        if (!isNaN(sleep) && sleep < SLEEP_MIN) {
+          body = `Evening review — Regret, Remedy, Resolve, then Rejoice. You slept under ${SLEEP_MIN}h — go easy on the alcohol tonight. 🌙`;
+        }
+      }
       report.push({ endpoint: (row.endpoint || "").slice(-12), tz: row.tz, localMin: nowMin, fire: key });
       if (dry) continue;
       try {
-        await webpush.sendNotification(row.subscription, JSON.stringify({ title: "Daily Practice", body: MESSAGES[key] }));
+        await webpush.sendNotification(row.subscription, JSON.stringify({ title: "Daily Practice", body }));
         sent++;
       } catch (e: any) {
         const code = e?.statusCode;
