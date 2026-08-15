@@ -38,6 +38,8 @@ Deno.serve(async (req: Request) => {
       "- Only fill a field if the person clearly refers to it. Otherwise use null.",
       "- Do NOT invent content. Booleans: true only if they clearly did the thing; else null.",
       "- For text fields, use the person's own words, lightly cleaned up. Keep it first-person.",
+      "- For list fields (3/10s, pauses), write each entry as a COMPLETE sentence including the situation, the feeling (including body sensations), and the underlying want — never a single word.",
+      "- Capture body sensations and what they were wanting in the most relevant field.",
       "- Return ONLY JSON matching the provided schema.",
       "",
       "Fields:",

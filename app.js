@@ -541,11 +541,11 @@ function buildAiSpec() {
     }
     if (it.notes) for (const n of it.notes) {
       props[n.id] = { type: ["string", "null"] };
-      guide.push(`${n.id} (string or null): ${n.label}. Use their own words; null if not mentioned.`);
+      guide.push(`${n.id} (string or null): ${n.label}. Their own words, first-person, including any body sensations and what they were wanting. null if not mentioned.`);
     }
     if (it.log) {
       props[it.id] = { type: ["array", "null"], items: { type: "string" } };
-      guide.push(`${it.id} (array of strings or null): each distinct “${it.label}” they mention — one entry each, including what they felt/wanted.`);
+      guide.push(`${it.id} (array of strings or null): one entry per distinct “${it.label}” moment. Each entry ONE full first-person sentence — the situation + what they felt (incl. body sensations) + what they were wanting. Never a single word.`);
     }
   }
   return {
