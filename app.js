@@ -9,9 +9,9 @@ const SECTIONS = [
   {
     title: "Morning",
     items: [
-      { id: "concentration", label: "Concentration meditation — 10 min",
+      { id: "concentration", label: "Concentration meditation", minutes: true,
         hint: "Focus on the breath. When the mind wanders, notice it and gently return." },
-      { id: "analytical", label: "Analytical meditation — 10 min",
+      { id: "analytical", label: "Analytical meditation", minutes: true,
         hint: "Bring up a mild example, notice it in the body, understand what you're wanting, and practise tolerating the feeling without needing to act.",
         select: { id: "analytical_theme", label: "Theme for today",
           options: ["", "Anger", "Being misunderstood", "Unfairness", "Rejection", "Attachment", "Accepting “no”"] },
@@ -88,10 +88,11 @@ function loadEntry(ds) {
     try {
       const e = JSON.parse(raw);
       if (!e.logs) e.logs = {};   // back-compat for entries saved before logs existed
+      if (!e.mins) e.mins = {};   // back-compat for entries saved before minutes existed
       return e;
     } catch (_) {}
   }
-  return { checks: {}, notes: {}, logs: {}, updated_at: null };
+  return { checks: {}, notes: {}, logs: {}, mins: {}, updated_at: null };
 }
 function storeEntry(ds, entry) { localStorage.setItem(LKEY(ds), JSON.stringify(entry)); }
 function allLocalDates() {
@@ -188,6 +189,17 @@ function renderItem(item, entry) {
   body.innerHTML = `<div class="item-label">${item.label}</div>` +
     (item.hint ? `<div class="item-hint">${item.hint}</div>` : "");
   head.appendChild(body);
+
+  // minutes: a number-only box on the right (e.g. how long you meditated)
+  if (item.minutes) {
+    const m = document.createElement("div");
+    m.className = "mins";
+    m.innerHTML = `<input type="number" min="0" max="600" inputmode="numeric" class="mins-input" aria-label="minutes" /><span class="mins-unit">min</span>`;
+    const inp = m.querySelector("input");
+    inp.value = entry.mins[item.id] || "";
+    inp.addEventListener("input", (e) => setMin(item.id, e.target.value));
+    head.appendChild(m);
+  }
   el.appendChild(head);
 
   // theme select
@@ -286,6 +298,9 @@ function toggleCheck(id) {
 function setNote(id, val, silent) {
   mutate((e) => { e.notes[id] = val; });
   if (!silent) renderChecklist();
+}
+function setMin(id, val) {
+  mutate((e) => { if (val === "" || val == null) delete e.mins[id]; else e.mins[id] = String(val); });
 }
 function addLog(id, text) {
   const t = (text || "").trim();
@@ -411,7 +426,7 @@ async function pushDirty() {
       const e = loadEntry(ds);
       const { error } = await sb.from("entries").upsert({
         user_id: user.id, entry_date: ds,
-        data: { checks: e.checks, notes: e.notes, logs: e.logs || {} },
+        data: { checks: e.checks, notes: e.notes, logs: e.logs || {}, mins: e.mins || {} },
         updated_at: e.updated_at || nowIso(),
       }, { onConflict: "user_id,entry_date" });
       if (error) throw error;
@@ -436,7 +451,7 @@ async function pullAll() {
       const remoteTime = row.updated_at ? Date.parse(row.updated_at) : 0;
       const localTime = local.updated_at ? Date.parse(local.updated_at) : 0;
       if (remoteTime >= localTime) {
-        storeEntry(ds, { checks: row.data.checks || {}, notes: row.data.notes || {}, logs: row.data.logs || {}, updated_at: row.updated_at });
+        storeEntry(ds, { checks: row.data.checks || {}, notes: row.data.notes || {}, logs: row.data.logs || {}, mins: row.data.mins || {}, updated_at: row.updated_at });
       }
     }
     setSyncState("synced");
@@ -547,6 +562,10 @@ function buildAiSpec() {
       const what = it.aiHint || `each distinct “${it.label}” moment`;
       guide.push(`${it.id} (array of strings or null): ${what}. One entry per moment, each ONE full first-person sentence — the situation + what they felt (incl. body sensations) + what they were wanting (and for a pause, what they did instead). Never a single word.`);
     }
+    if (it.minutes) {
+      props[it.id + "_min"] = { type: ["integer", "null"] };
+      guide.push(`${it.id}_min (integer or null): how many minutes of “${it.label}” they did, if stated.`);
+    }
   }
   return {
     schema: { type: "object", properties: props, required: Object.keys(props), additionalProperties: false },
@@ -571,6 +590,10 @@ function mergeResult(ds, result) {
     }
     if (it.log && Array.isArray(result[it.id])) {
       for (const s of result[it.id]) if (s && s.trim()) (e.logs[it.id] = e.logs[it.id] || []).push({ t: nowIso(), text: s.trim() });
+    }
+    if (it.minutes) {
+      const mv = result[it.id + "_min"];
+      if (mv !== null && mv !== undefined && mv !== "") e.mins[it.id] = String(mv);
     }
   }
   e.updated_at = nowIso();
@@ -820,6 +843,8 @@ function showReview(ds, result) {
       fields.push({ kind: "note", id: n.id, label: n.label, value: String(result[n.id]).trim() });
     if (it.log && Array.isArray(result[it.id]) && result[it.id].length)
       fields.push({ kind: "log", id: it.id, label: it.label + " (one per line)", value: result[it.id].join("\n") });
+    if (it.minutes && result[it.id + "_min"] != null && result[it.id + "_min"] !== "")
+      fields.push({ kind: "min", id: it.id + "_min", label: it.label + " (minutes)", value: String(result[it.id + "_min"]) });
   }
 
   const hasAny = checks.length || fields.length;
@@ -829,6 +854,9 @@ function showReview(ds, result) {
     if (f.kind === "select") {
       const opts = f.options.map((o) => `<option value="${o}">${o || "— none —"}</option>`).join("");
       return `<div class="rev-row"><label class="rev-h"></label><select data-field="${f.id}" data-kind="select">${opts}</select></div>`;
+    }
+    if (f.kind === "min") {
+      return `<div class="rev-row"><label class="rev-h"></label><input type="number" min="0" max="600" data-field="${f.id}" data-kind="min" class="rev-min" /></div>`;
     }
     const rows = f.kind === "log" ? Math.min(6, (f.value.split("\n").length + 1)) : 3;
     return `<div class="rev-row"><label class="rev-h"></label><textarea data-field="${f.id}" data-kind="${f.kind}" rows="${rows}"></textarea></div>`;

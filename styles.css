@@ -179,6 +179,22 @@ button { font-family: inherit; cursor: pointer; }
 .item.done .item-label { color: var(--muted); text-decoration: line-through; text-decoration-color: var(--line); }
 .item-hint { font-size: .84rem; color: var(--muted); margin-top: 2px; }
 
+/* minutes box on the right of an item */
+.mins { flex: 0 0 auto; display: flex; align-items: center; gap: 5px; margin-left: 10px; margin-top: 1px; }
+.mins-input {
+  width: 54px; text-align: center; border: 1px solid var(--line); border-radius: 9px;
+  padding: 7px 4px; font: inherit; font-size: .92rem; background: var(--field); color: var(--ink); outline: none;
+  -moz-appearance: textfield;
+}
+.mins-input::-webkit-outer-spin-button, .mins-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.mins-input:focus { border-color: var(--indigo); background: var(--field-strong); }
+.mins-unit { font-size: .78rem; color: var(--muted); }
+.rev-min {
+  width: 100px; border: 1px solid var(--line); border-radius: 10px; padding: 9px 10px;
+  font: inherit; font-size: .92rem; background: var(--field); color: var(--ink); outline: none;
+}
+.rev-min:focus { border-color: var(--indigo); background: var(--field-strong); }
+
 .note { margin-top: 10px; }
 .note label { display: block; font-size: .78rem; color: var(--muted); margin-bottom: 3px; }
 .note textarea, .note select {
