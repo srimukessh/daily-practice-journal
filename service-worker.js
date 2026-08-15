@@ -1,5 +1,5 @@
 /* Offline app-shell cache. Bump CACHE when you change static files to force an update. */
-const CACHE = "daily-practice-v12";
+const CACHE = "daily-practice-v13";
 const SHELL = [
   "./",
   "./index.html",
@@ -53,17 +53,15 @@ self.addEventListener("fetch", (e) => {
   // Supabase REST/auth calls: always go to network (data must be live)
   if (/supabase\.co$/.test(url.hostname)) return;
 
-  // App shell + CDN lib: cache-first, then network, and refresh cache in background.
+  // Network-first: always get the latest when online (fixes stale-cache on updates),
+  // fall back to cache when offline. Keeps the app fresh without a re-install.
   e.respondWith(
-    caches.match(req).then((cached) => {
-      const net = fetch(req).then((res) => {
-        if (res && res.ok && (url.origin === location.origin || url.hostname.includes("jsdelivr"))) {
-          const copy = res.clone();
-          caches.open(CACHE).then((c) => c.put(req, copy));
-        }
-        return res;
-      }).catch(() => cached);
-      return cached || net;
-    })
+    fetch(req).then((res) => {
+      if (res && res.ok && (url.origin === location.origin || url.hostname.includes("jsdelivr"))) {
+        const copy = res.clone();
+        caches.open(CACHE).then((c) => c.put(req, copy));
+      }
+      return res;
+    }).catch(() => caches.match(req))
   );
 });

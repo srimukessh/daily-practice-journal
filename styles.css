@@ -326,10 +326,10 @@ button { font-family: inherit; cursor: pointer; }
 .time-row input { border: 1px solid var(--line); border-radius: 8px; padding: 6px; font: inherit; background: var(--field); color: var(--ink); }
 .secondary-btn {
   display: block; width: 100%; background: var(--indigo-soft); color: var(--indigo);
-  border: 0; padding: 13px; border-radius: 12px; font-weight: 600; margin-bottom: 8px;
+  border: 1px solid var(--line); padding: 13px; border-radius: 12px; font-weight: 600; margin-bottom: 8px;
 }
 .danger-btn {
-  display: block; width: 100%; background: #fff; color: #dc2626; border: 1px solid #f3c6c6;
+  display: block; width: 100%; background: transparent; color: #ef4444; border: 1px solid var(--line);
   padding: 13px; border-radius: 12px; font-weight: 600; margin-bottom: 8px;
 }
 .version { text-align: center; margin-top: 18px; opacity: .7; }
@@ -337,8 +337,9 @@ button { font-family: inherit; cursor: pointer; }
 /* ===== Toast ===== */
 .toast {
   position: fixed; left: 50%; bottom: calc(20px + var(--safe-bot)); transform: translateX(-50%);
-  background: var(--ink); color: #fff; padding: 10px 18px; border-radius: 99px;
-  font-size: .9rem; z-index: 20; box-shadow: 0 8px 24px rgba(0,0,0,.3);
+  background: #2a2d3a; color: #f6f7fb; padding: 10px 18px; border-radius: 99px;
+  font-size: .9rem; z-index: 40; box-shadow: 0 8px 24px rgba(0,0,0,.4);
+  border: 1px solid rgba(255,255,255,.08); max-width: 88vw; text-align: center;
 }
 
 @media (prefers-color-scheme: dark) {

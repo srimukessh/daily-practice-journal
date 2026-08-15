@@ -45,9 +45,9 @@ const SECTIONS = [
         notes: [{ id: "rejoice_note", label: "What did I handle well today?", ph: "" }] },
       { id: "reading", label: "Reading",
         hint: "Something on emotional regulation / mindfulness. Read slowly; stop when something feels personally important and reflect on it, rather than finishing the chapter.",
-        select: { id: "reading_book", label: "Book",
-          options: ["", "Śāntideva — Bodhicaryāvatāra", "Thich Nhat Hanh", "Pema Chödrön", "The Book of Joy", "Other"] },
-        notes: [{ id: "reading_note", label: "What landed (optional)", ph: "What felt personally important?" }] },
+        multiselect: { id: "reading_books", label: "Book(s)",
+          options: ["Śāntideva — Bodhicaryāvatāra", "Thich Nhat Hanh", "Pema Chödrön", "The Book of Joy"] },
+        notes: [{ id: "reading_note", label: "What did you read & learn?", ph: "What book did you read, and what did you learn from it today?" }] },
       { id: "before_bed", label: "Before bed",
         hint: "“Regret the behaviour. Don't hate myself. Learn, practise, repeat.”" },
     ],
@@ -248,6 +248,26 @@ function renderItem(item, entry) {
     el.appendChild(wrap);
   }
 
+  // multi-select chips (e.g. which book(s) you read)
+  if (item.multiselect) {
+    const ms = item.multiselect;
+    const sel = new Set(entry.notes[ms.id] || []);
+    const wrap = document.createElement("div");
+    wrap.className = "note";
+    wrap.innerHTML = `<label>${ms.label}</label>`;
+    const chips = document.createElement("div");
+    chips.className = "sub-checks";
+    for (const o of ms.options) {
+      const c = document.createElement("button");
+      c.className = "chip" + (sel.has(o) ? " on" : "");
+      c.textContent = o;
+      c.onclick = () => toggleMulti(ms.id, o);
+      chips.appendChild(c);
+    }
+    wrap.appendChild(chips);
+    el.appendChild(wrap);
+  }
+
   // guided routine (analytical meditation): generate + step through
   if (item.routine) {
     const r = document.createElement("div");
@@ -354,6 +374,14 @@ function setNote(id, val, silent) {
 }
 function setMin(id, val) {
   mutate((e) => { if (val === "" || val == null) delete e.mins[id]; else e.mins[id] = String(val); });
+}
+function toggleMulti(id, val) {
+  mutate((e) => {
+    const set = new Set(e.notes[id] || []);
+    set.has(val) ? set.delete(val) : set.add(val);
+    e.notes[id] = [...set];
+  });
+  renderChecklist();
 }
 function addLog(id, text) {
   const t = (text || "").trim();
@@ -659,6 +687,10 @@ function buildAiSpec() {
       props[it.select.id] = { type: ["string", "null"], enum: [...opts, null] };
       guide.push(`${it.select.id} (one of: ${opts.join(", ")}, or null): ${it.select.label} for “${it.label}”. Pick the closest option; use "Other" if named but not listed.`);
     }
+    if (it.multiselect) {
+      props[it.multiselect.id] = { type: ["array", "null"], items: { type: "string", enum: it.multiselect.options } };
+      guide.push(`${it.multiselect.id} (array from: ${it.multiselect.options.join(", ")}, or null): which of these they read.`);
+    }
     if (it.notes) for (const n of it.notes) {
       props[n.id] = { type: ["string", "null"] };
       guide.push(`${n.id} (string or null): ${n.label}. Their own words, first-person, including any body sensations and what they were wanting. null if not mentioned.`);
@@ -691,6 +723,11 @@ function mergeResult(ds, result) {
     if (!it.group && !it.log && result[it.id] === true) e.checks[it.id] = true;
     if (it.group) for (const g of it.group) if (result[g.id] === true) e.checks[g.id] = true;
     if (it.select && result[it.select.id]) e.notes[it.select.id] = result[it.select.id];
+    if (it.multiselect && Array.isArray(result[it.multiselect.id]) && result[it.multiselect.id].length) {
+      const set = new Set(e.notes[it.multiselect.id] || []);
+      result[it.multiselect.id].forEach((x) => set.add(x));
+      e.notes[it.multiselect.id] = [...set];
+    }
     if (it.notes) for (const n of it.notes) {
       const v = result[n.id];
       if (v && String(v).trim()) {
@@ -961,6 +998,8 @@ function showReview(ds, result) {
       fields.push({ kind: "min", id: it.id + "_min", label: it.label + " (minutes)", value: String(result[it.id + "_min"]) });
     if (it.sleep && result["sleep_hours"] != null && result["sleep_hours"] !== "")
       fields.push({ kind: "min", id: "sleep_hours", label: "Hours slept", value: String(result["sleep_hours"]) });
+    if (it.multiselect && Array.isArray(result[it.multiselect.id]) && result[it.multiselect.id].length)
+      fields.push({ kind: "csv", id: it.multiselect.id, label: it.multiselect.label, value: result[it.multiselect.id].join(", ") });
   }
 
   const hasAny = checks.length || fields.length;
@@ -973,6 +1012,9 @@ function showReview(ds, result) {
     }
     if (f.kind === "min") {
       return `<div class="rev-row"><label class="rev-h"></label><input type="number" min="0" max="600" data-field="${f.id}" data-kind="min" class="rev-min" /></div>`;
+    }
+    if (f.kind === "csv") {
+      return `<div class="rev-row"><label class="rev-h"></label><input type="text" data-field="${f.id}" data-kind="csv" class="rev-min" style="width:100%" /></div>`;
     }
     const rows = f.kind === "log" ? Math.min(6, (f.value.split("\n").length + 1)) : 3;
     return `<div class="rev-row"><label class="rev-h"></label><textarea data-field="${f.id}" data-kind="${f.kind}" rows="${rows}"></textarea></div>`;
@@ -1005,6 +1047,7 @@ function showReview(ds, result) {
     ov.querySelectorAll("[data-field]").forEach((ctrl) => {
       const id = ctrl.dataset.field;
       if (ctrl.dataset.kind === "log") edited[id] = ctrl.value.split("\n").map((s) => s.trim()).filter(Boolean);
+      else if (ctrl.dataset.kind === "csv") edited[id] = ctrl.value.split(",").map((s) => s.trim()).filter(Boolean);
       else edited[id] = ctrl.value.trim();
     });
     mergeResult(ds, edited); renderChecklist(); close(); toast("Added to your journal");
