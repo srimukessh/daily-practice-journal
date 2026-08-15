@@ -1,5 +1,5 @@
 /* Offline app-shell cache. Bump CACHE when you change static files to force an update. */
-const CACHE = "daily-practice-v8";
+const CACHE = "daily-practice-v9";
 const SHELL = [
   "./",
   "./index.html",
@@ -22,6 +22,28 @@ self.addEventListener("activate", (e) => {
     caches.keys().then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))))
       .then(() => self.clients.claim())
   );
+});
+
+// Web Push: show the reminder even when the app is closed.
+self.addEventListener("push", (e) => {
+  let payload = { title: "Daily Practice", body: "Time for your practice." };
+  try { if (e.data) payload = { ...payload, ...e.data.json() }; } catch (_) {}
+  e.waitUntil(self.registration.showNotification(payload.title, {
+    body: payload.body,
+    icon: "icons/icon-192.png",
+    badge: "icons/icon-192.png",
+    tag: "daily-practice-reminder",
+  }));
+});
+
+// Tapping a reminder focuses the app (or opens it).
+self.addEventListener("notificationclick", (e) => {
+  e.notification.close();
+  e.waitUntil((async () => {
+    const all = await clients.matchAll({ type: "window", includeUncontrolled: true });
+    for (const c of all) { if ("focus" in c) return c.focus(); }
+    if (clients.openWindow) return clients.openWindow("./");
+  })());
 });
 
 self.addEventListener("fetch", (e) => {

@@ -376,41 +376,72 @@ function renderSettings() {
   $("#rem-morning").value = r.morning;
   $("#rem-evening").value = r.evening;
   $("#rem-bed").value = r.bed;
+  const btn = $("#enable-notifs");
+  const denied = ("Notification" in window) && Notification.permission === "denied";
+  btn.disabled = false; btn.onclick = null;
+  if (!pushSupported()) { btn.textContent = "Not supported on this browser"; btn.disabled = true; }
+  else if (denied) { btn.textContent = "Notifications blocked — allow in browser settings"; btn.disabled = true; }
+  else if (r.on) { btn.textContent = "Turn reminders off"; btn.onclick = disablePush; }
+  else { btn.textContent = "Enable reminders"; btn.onclick = enablePush; }
   $("#acct-email").textContent = user ? `Signed in as ${user.email}` : (SYNC_ON ? "Not signed in" : "Offline-only mode (Supabase not configured)");
   $("#signout-btn").classList.toggle("hidden", !user);
 }
 
-// ===== Reminders (best-effort, local) =====
+// ===== Reminders via Web Push (fire even when the app is closed) =====
+const VAPID_PUBLIC = "BKlNxufxX0qgEpZS6aNR8OIL5Mhf4TIrFNEoCFJ9T8CDcuhj6oa4_KZIsg9Mj4oUyCNVTj8A5q0xvJdU1etPZaM";
 function getReminders() {
   try { return JSON.parse(localStorage.getItem("dp:reminders")) || { morning: "07:30", evening: "21:00", bed: "22:30", on: false }; }
   catch (_) { return { morning: "07:30", evening: "21:00", bed: "22:30", on: false }; }
 }
 function saveReminders(r) { localStorage.setItem("dp:reminders", JSON.stringify(r)); }
+function pushSupported() { return ("serviceWorker" in navigator) && ("PushManager" in window) && ("Notification" in window); }
 
-let reminderTimers = [];
-function scheduleReminders() {
-  reminderTimers.forEach(clearTimeout); reminderTimers = [];
+function urlBase64ToUint8Array(b64) {
+  const pad = "=".repeat((4 - (b64.length % 4)) % 4);
+  const s = (b64 + pad).replace(/-/g, "+").replace(/_/g, "/");
+  const raw = atob(s), arr = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i);
+  return arr;
+}
+async function currentPushSub() {
+  if (!pushSupported()) return null;
+  try { const reg = await navigator.serviceWorker.ready; return await reg.pushManager.getSubscription(); } catch (_) { return null; }
+}
+async function saveSubscription(sub, enabled) {
+  if (!sb || !user || !sub) return;
+  const j = sub.toJSON();
   const r = getReminders();
-  if (!r.on || !("Notification" in window) || Notification.permission !== "granted") return;
-  const plan = [
-    { t: r.morning, msg: "Morning practice: concentration + analytical meditation." },
-    { t: r.evening, msg: "Evening review: what triggered me today? Four Opponent Powers." },
-    { t: r.bed, msg: "Before bed: regret the behaviour, don't hate myself. Learn, practise, repeat." },
-  ];
-  for (const p of plan) {
-    if (!p.t) continue;
-    const [hh, mm] = p.t.split(":").map(Number);
-    const next = new Date();
-    next.setHours(hh, mm, 0, 0);
-    if (next <= new Date()) next.setDate(next.getDate() + 1);
-    const delay = next - new Date();
-    if (delay < 2147483647) { // setTimeout max ~24.8 days
-      reminderTimers.push(setTimeout(() => {
-        new Notification("Daily Practice", { body: p.msg, icon: "icons/icon-192.png" });
-        scheduleReminders();
-      }, delay));
-    }
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  await sb.from("push_subscriptions").upsert({
+    user_id: user.id, endpoint: j.endpoint, subscription: j,
+    reminders: { morning: r.morning, evening: r.evening, bed: r.bed },
+    tz, enabled, updated_at: nowIso(),
+  }, { onConflict: "endpoint" });
+}
+async function enablePush() {
+  if (!pushSupported()) return toast("Notifications aren't supported here");
+  const perm = await Notification.requestPermission();
+  if (perm !== "granted") { renderSettings(); return toast("Notifications blocked"); }
+  const reg = await navigator.serviceWorker.ready;
+  let sub = await reg.pushManager.getSubscription();
+  if (!sub) {
+    try { sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC) }); }
+    catch (e) { console.warn("subscribe failed", e); return toast("Couldn't enable push"); }
   }
+  await saveSubscription(sub, true);
+  const r = getReminders(); r.on = true; saveReminders(r);
+  renderSettings(); toast("Reminders on ✓");
+}
+async function disablePush() {
+  const sub = await currentPushSub();
+  if (sub) await saveSubscription(sub, false);
+  const r = getReminders(); r.on = false; saveReminders(r);
+  renderSettings(); toast("Reminders off");
+}
+async function syncReminderTimes() {
+  if (!getReminders().on) return;
+  const sub = await currentPushSub();
+  if (sub) await saveSubscription(sub, true);
 }
 
 // ===== Sync (Supabase) =====
@@ -919,18 +950,10 @@ function bindEvents() {
 
   ["morning", "evening", "bed"].forEach((k) => {
     $("#rem-" + k).onchange = (e) => {
-      const r = getReminders(); r[k] = e.target.value; saveReminders(r); scheduleReminders();
+      const r = getReminders(); r[k] = e.target.value; saveReminders(r); syncReminderTimes();
     };
   });
-  $("#enable-notifs").onclick = async () => {
-    if (!("Notification" in window)) return toast("Notifications not supported here");
-    const perm = await Notification.requestPermission();
-    if (perm === "granted") {
-      const r = getReminders(); r.on = true; saveReminders(r); scheduleReminders();
-      toast("Reminders on");
-      new Notification("Daily Practice", { body: "Reminders enabled — you're set.", icon: "icons/icon-192.png" });
-    } else toast("Notifications blocked");
-  };
+  // #enable-notifs click handler is set in renderSettings (toggles enable/disable)
 
   // auth form — email + password (works inside the installed PWA; no email/magic-link needed).
   // Tries to sign in; if the account doesn't exist yet, creates it with that password.
@@ -970,7 +993,7 @@ function bindEvents() {
   window.addEventListener("online", () => { setSyncState("syncing…"); pushDirty().then(pullAll).then(processPending).then(processPendingRecordings); });
   window.addEventListener("offline", () => setSyncState("offline — saved on device"));
   document.addEventListener("visibilitychange", () => {
-    if (!document.hidden) { scheduleReminders(); if (user) pullAll(); }
+    if (!document.hidden && user) pullAll();
   });
 }
 
@@ -983,7 +1006,6 @@ function bindEvents() {
     window.__t = { buildAiSpec, mergeResult, summariseResult, loadEntry, ALL_ITEMS, SPEAKING_SCRIPT, openSpeak, transcribeBlob, showReview };
   }
   await initAuth();
-  scheduleReminders();
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("service-worker.js").catch((e) => console.warn("SW reg failed", e));
   }
