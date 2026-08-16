@@ -342,6 +342,7 @@ function renderItem(item, entry) {
       ta.addEventListener("input", (e) => setNote(n.id, e.target.value, /*silent*/ true));
       ta.addEventListener("blur", () => renderProgress(loadEntry(currentDs)));
       el.appendChild(wrap);
+      attachFieldMic(ta);
     }
   }
   return el;
@@ -981,6 +982,48 @@ function attachRecorder(ov) {
   recBtn.onclick = () => { (rec && rec.state === "recording") ? rec.stop() : start(); };
 }
 
+// Add a ChatGPT-style 🎤 button to a textarea: record → Whisper → insert at the cursor.
+// Online-only (Whisper). Offline, the iOS keyboard's own mic does on-device dictation for free.
+function attachFieldMic(ta) {
+  if (!ta || ta.dataset.mic || !(navigator.mediaDevices && window.MediaRecorder)) return;
+  ta.dataset.mic = "1";
+  const wrap = document.createElement("div");
+  wrap.className = "field-wrap";
+  ta.parentNode.insertBefore(wrap, ta);
+  wrap.appendChild(ta);
+  const btn = document.createElement("button");
+  btn.type = "button"; btn.className = "field-mic"; btn.textContent = "🎤"; btn.setAttribute("aria-label", "dictate");
+  wrap.appendChild(btn);
+
+  let rec = null, chunks = [], mime = "";
+  btn.onclick = async () => {
+    if (rec && rec.state === "recording") { rec.stop(); return; }
+    if (!navigator.onLine || !user) return toast("Offline — use the keyboard's 🎤 (works offline)");
+    let stream;
+    try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
+    catch (_) { return toast("Microphone permission needed"); }
+    mime = pickAudioMime();
+    rec = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
+    mime = rec.mimeType || mime; chunks = [];
+    rec.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
+    rec.onstop = async () => {
+      stream.getTracks().forEach((t) => t.stop());
+      btn.classList.remove("recording"); btn.textContent = "🎤"; btn.disabled = true;
+      try {
+        const text = await transcribeBlob(new Blob(chunks, { type: mime || "audio/webm" }), mime);
+        const cur = ta.value, pos = ta.selectionStart ?? cur.length;
+        const insert = (cur && !/\s$/.test(cur.slice(0, pos)) ? " " : "") + text;
+        ta.value = cur.slice(0, pos) + insert + cur.slice(pos);
+        ta.dispatchEvent(new Event("input", { bubbles: true }));
+        if (ta.classList.contains("log-text")) autoGrow(ta);
+        ta.focus();
+      } catch (_) { toast("Couldn't transcribe"); }
+      finally { btn.disabled = false; }
+    };
+    rec.start(); btn.classList.add("recording"); btn.textContent = "⏹";
+  };
+}
+
 // Editable review: every field the AI filled is shown as an editable control.
 // Toggle off a wrongly-ticked item; fix any wording; then Apply what you edited.
 function showReview(ds, result) {
@@ -1152,6 +1195,7 @@ function openRoutineInput(item) {
       openRoutineView(item);
     } catch (e) { load.remove(); toast("Couldn't generate routine"); console.warn("routine failed", e); }
   };
+  attachFieldMic(ov.querySelector("#rt-sit"));
   setTimeout(() => ov.querySelector("#rt-sit").focus(), 50);
 }
 
@@ -1212,6 +1256,7 @@ function bindEvents() {
   $("#summarise-btn").onclick = () => openSummary(summaryDays);
   $("#context").addEventListener("input", (e) => { userContext = e.target.value; });
   $("#context").addEventListener("blur", (e) => saveContext(e.target.value.trim()));
+  attachFieldMic($("#context"));
   $("#signout-btn").onclick = async () => { if (sb) await sb.auth.signOut(); location.reload(); };
 
   ["morning", "evening", "bed"].forEach((k) => {

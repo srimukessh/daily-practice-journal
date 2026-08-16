@@ -223,6 +223,16 @@ button { font-family: inherit; cursor: pointer; }
   color: var(--ink); outline: none;
 }
 .note textarea:focus, .note select:focus { border-color: var(--indigo); background: var(--field-strong); }
+/* per-field dictation mic */
+.field-wrap { position: relative; }
+.field-wrap textarea { padding-right: 42px; }
+.field-mic {
+  position: absolute; right: 8px; bottom: 8px; width: 30px; height: 30px; border-radius: 50%;
+  border: 1px solid var(--line); background: var(--card); color: var(--muted);
+  font-size: 14px; display: grid; place-items: center; line-height: 1; padding: 0;
+}
+.field-mic.recording { background: #dc2626; color: #fff; border-color: #dc2626; animation: rec-pulse 1.2s ease-in-out infinite; }
+.field-mic:disabled { opacity: .6; }
 .sub-checks { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
 .chip {
   border: 1px solid var(--line); background: var(--paper); border-radius: 99px;
