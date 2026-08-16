@@ -39,6 +39,7 @@
   <!-- ===== App shell ===== -->
   <main id="app" class="app hidden">
     <header class="topbar">
+      <button id="menu-btn" class="icon-btn" aria-label="Menu">☰</button>
       <button id="prev-day" class="icon-btn" aria-label="Previous day">‹</button>
       <div class="date-block">
         <button id="date-label" class="date-label"></button>
@@ -51,7 +52,7 @@
     <nav class="tabs">
       <button class="tab active" data-view="checklist">Checklist</button>
       <button class="tab" data-view="calendar">History</button>
-      <button class="tab" data-view="settings">Settings</button>
+      <button class="tab" data-view="reflection">Reflection</button>
     </nav>
 
     <!-- Checklist view -->
@@ -79,10 +80,13 @@
       </div>
       <div id="calendar" class="calendar"></div>
       <p class="cal-legend">Tap a day to open it. Ring fullness = how much you completed.</p>
+    </section>
 
-      <div class="summary-cta">
+    <!-- Reflection view -->
+    <section id="view-reflection" class="view hidden">
+      <div class="summary-cta first">
         <h2 class="sum-title">Reflect over time</h2>
-        <p class="settings-hint">Feed your entries through AI to see what went well, what was hard, and patterns.</p>
+        <p class="settings-hint">Feed your entries through a reasoning model to see what went well, what was hard, and the patterns underneath.</p>
         <div class="range-chips">
           <button class="range-chip on" data-days="7">7 days</button>
           <button class="range-chip" data-days="14">14 days</button>
@@ -92,9 +96,13 @@
       </div>
     </section>
 
-    <!-- Settings view -->
-    <section id="view-settings" class="view hidden">
+    <!-- Settings panel (opened from the ☰ menu, not a tab) -->
+    <section id="view-settings" class="settings-panel hidden">
       <div class="settings">
+        <div class="settings-head">
+          <h1>Settings</h1>
+          <button id="settings-close" class="icon-btn" aria-label="Close">✕</button>
+        </div>
         <h2>Reminders</h2>
         <p class="settings-hint">Push reminders at your chosen times — even when the app is closed. On iPhone, add the app to your Home Screen first (iOS 16.4+), then tap Enable and Allow.</p>
         <button id="enable-notifs" class="secondary-btn">Enable reminders</button>
@@ -113,7 +121,10 @@
         <h2>Account</h2>
         <p id="acct-email" class="settings-hint"></p>
         <button id="signout-btn" class="danger-btn">Sign out</button>
-        <p class="settings-hint version">Daily Practice · offline-first PWA</p>
+
+        <h2>About</h2>
+        <p class="settings-hint">Daily Practice — a private, offline-first journal for meditation and emotional regulation. Built for you; your data is yours.</p>
+        <p class="settings-hint version">offline-first PWA</p>
       </div>
     </section>
 

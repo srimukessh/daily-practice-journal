@@ -60,7 +60,7 @@ button { font-family: inherit; cursor: pointer; }
 .app { max-width: 620px; margin: 0 auto; padding-bottom: calc(28px + var(--safe-bot)); }
 .topbar {
   position: sticky; top: 0; z-index: 5;
-  display: grid; grid-template-columns: 44px 1fr 44px auto; align-items: center; gap: 4px;
+  display: grid; grid-template-columns: 40px 40px 1fr 40px auto; align-items: center; gap: 4px;
   padding: calc(10px + var(--safe-top)) 12px 10px;
   background: linear-gradient(160deg, var(--indigo) 0%, var(--indigo-dark) 100%);
   color: #fff;
@@ -327,6 +327,7 @@ button { font-family: inherit; cursor: pointer; }
 
 /* windowed summaries */
 .summary-cta { margin-top: 22px; border-top: 1px solid var(--line); padding-top: 16px; }
+.summary-cta.first { margin-top: 4px; border-top: 0; padding-top: 0; }
 .sum-title { font-size: 1rem; margin: 0 0 4px; }
 .range-chips { display: flex; gap: 8px; margin: 10px 0; }
 .range-chip { flex: 1; border: 1px solid var(--line); background: var(--card); color: var(--muted); border-radius: 10px; padding: 10px; font-weight: 600; font-size: .85rem; }
@@ -338,7 +339,15 @@ button { font-family: inherit; cursor: pointer; }
 .sum-list li { margin-bottom: 6px; font-size: .92rem; }
 .sum-suggest { font-size: .95rem; background: var(--indigo-soft); color: var(--ink); padding: 11px 13px; border-radius: 10px; margin: 0; }
 
-/* ===== Settings ===== */
+/* ===== Settings (slide-over panel from the ☰ menu) ===== */
+.settings-panel {
+  position: fixed; inset: 0; z-index: 45; background: var(--paper);
+  overflow-y: auto; padding: calc(14px + var(--safe-top)) 16px calc(28px + var(--safe-bot));
+  animation: sheet-up .2s ease; max-width: 620px; margin: 0 auto;
+}
+.settings-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
+.settings-head h1 { font-size: 1.3rem; margin: 0; }
+.settings-head .icon-btn { background: var(--indigo-soft); color: var(--indigo); }
 .settings h2 { font-size: 1rem; margin: 20px 0 8px; }
 .settings-hint { color: var(--muted); font-size: .84rem; margin: 4px 0 12px; }
 .time-row {

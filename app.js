@@ -406,11 +406,12 @@ function hhmm(iso) {
 // ===== Views / tabs =====
 function switchView(view) {
   document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("active", t.dataset.view === view));
-  ["checklist", "calendar", "settings"].forEach((v) =>
+  ["checklist", "calendar", "reflection"].forEach((v) =>
     $("#view-" + v).classList.toggle("hidden", v !== view));
   if (view === "calendar") renderCalendar();
-  if (view === "settings") renderSettings();
 }
+function openSettings() { renderSettings(); $("#view-settings").classList.remove("hidden"); }
+function closeSettings() { $("#view-settings").classList.add("hidden"); }
 
 function setDate(ds) {
   currentDs = ds;
@@ -1278,6 +1279,8 @@ function bindEvents() {
   $("#cal-prev").onclick = () => { calCursor.setMonth(calCursor.getMonth() - 1); renderCalendar(); };
   $("#cal-next").onclick = () => { calCursor.setMonth(calCursor.getMonth() + 1); renderCalendar(); };
 
+  $("#menu-btn").onclick = openSettings;
+  $("#settings-close").onclick = closeSettings;
   $("#speak-btn").onclick = openSpeak;
   $("#export-btn").onclick = exportJson;
   $("#sync-now").onclick = syncNow;
