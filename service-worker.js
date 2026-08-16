@@ -1,7 +1,8 @@
 /* Offline app-shell cache. Bump CACHE when you change static files to force an update. */
-const CACHE = "daily-practice-v21";
+const CACHE = "daily-practice-v22";
 const MED_AUDIO = [
-  "begin", "settle", "breath", "body", "anchor", "wander", "midway", "closing", "end",
+  "in", "hold", "out", "a_warmup", "a_box", "a_478", "a_balance", "a_coherent",
+  "f_begin", "f_mindful", "f_closing", "f_end",
 ].map((n) => `./audio/voice/${n}.mp3`)
   .concat(["rain", "ocean", "spiritual"].map((n) => `./audio/bg/${n}.mp3`))
   .concat(["./audio/bell/bell.mp3"]);

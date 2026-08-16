@@ -1314,18 +1314,39 @@ function openRoutineView(item) {
   ov.querySelector("#rt-regen").onclick = () => { stop(); ov.remove(); openRoutineInput(item); };
 }
 
-// ===== Guided concentration meditation (audio player) =====
-function cueSchedule(minutes) {
-  if (minutes <= 3) return [
-    { at: 0, c: "bell" }, { at: 3, c: "begin" }, { at: 14, c: "settle" }, { at: 28, c: "breath" }, { at: 50, c: "body" },
-    { at: 78, c: "anchor" }, { at: 120, c: "wander" }, { at: 158, c: "closing" }, { at: 171, c: "end" }, { at: 176, c: "bell" }];
-  if (minutes <= 5) return [
-    { at: 0, c: "bell" }, { at: 3, c: "begin" }, { at: 14, c: "settle" }, { at: 30, c: "breath" }, { at: 55, c: "body" },
-    { at: 90, c: "anchor" }, { at: 150, c: "wander" }, { at: 210, c: "midway" }, { at: 255, c: "wander" }, { at: 280, c: "closing" }, { at: 293, c: "end" }, { at: 297, c: "bell" }];
-  return [
-    { at: 0, c: "bell" }, { at: 3, c: "begin" }, { at: 15, c: "settle" }, { at: 35, c: "breath" }, { at: 70, c: "body" },
-    { at: 120, c: "anchor" }, { at: 200, c: "wander" }, { at: 280, c: "midway" }, { at: 360, c: "anchor" }, { at: 440, c: "wander" },
-    { at: 520, c: "midway" }, { at: 575, c: "closing" }, { at: 590, c: "end" }, { at: 596, c: "bell" }];
+// ===== Guided concentration meditation (paced-breathing player) =====
+// Each pattern: seconds to inhale / hold / exhale / hold-after, + its spoken announcement.
+const PATTERNS = {
+  warmup:   { in: 4, hold: 0, out: 6, hold2: 0, announce: "a_warmup" },
+  box:      { in: 4, hold: 4, out: 4, hold2: 4, announce: "a_box" },
+  calm478:  { in: 4, hold: 7, out: 8, hold2: 0, announce: "a_478" },
+  balance:  { in: 4, hold: 3, out: 5, hold2: 0, announce: "a_balance" },
+  coherent: { in: 5, hold: 0, out: 5, hold2: 0, announce: "a_coherent" },
+};
+function patternList(minutes) {
+  if (minutes <= 3) return ["warmup", "box", "coherent"];
+  if (minutes <= 5) return ["warmup", "box", "calm478", "coherent"];
+  return ["warmup", "box", "calm478", "balance", "coherent"];
+}
+const SAY = { f_begin: 7, f_mindful: 13, f_closing: 6, announce: 5 }; // approx clip seconds
+function cycleDur(p) { return p.in + p.hold + p.out + p.hold2; }
+
+// Build the ordered session (say / breathe steps) sized to the chosen minutes.
+function buildSession(minutes) {
+  const list = patternList(minutes);
+  const steps = [{ say: "f_begin", dur: SAY.f_begin }, { say: "f_mindful", dur: SAY.f_mindful }];
+  const reserved = SAY.f_begin + SAY.f_mindful + SAY.f_closing + SAY.announce * list.length;
+  const middle = Math.max(60, minutes * 60 - reserved);
+  const slot = middle / list.length;
+  for (const id of list) {
+    const p = PATTERNS[id];
+    const cycles = Math.max(1, Math.round(slot / cycleDur(p)));
+    steps.push({ say: p.announce, dur: SAY.announce });
+    steps.push({ breathe: id, cycles });
+  }
+  steps.push({ say: "f_closing", dur: SAY.f_closing });
+  const total = steps.reduce((a, s) => a + (s.dur || (s.breathe ? PATTERNS[s.breathe] && cycleDur(PATTERNS[s.breathe]) * s.cycles : 0)), 0);
+  return { steps, total };
 }
 
 function openMeditationSetup(item) {
@@ -1360,12 +1381,12 @@ function openMeditationSetup(item) {
 }
 
 function openMeditationPlayer(item, minutes, bg) {
-  const total = minutes * 60;
-  const schedule = cueSchedule(minutes);
+  const { steps, total } = buildSession(minutes);
   const ov = buildOverlay(`
     <div class="med-player">
       <button class="sheet-x med-x" aria-label="close">×</button>
-      <div class="breath-wrap"><div class="breath-circle"></div><div class="breath-label" id="breath-label">Settle in…</div></div>
+      <div class="breath-wrap"><div class="breath-circle" id="breath-circle"></div>
+        <div class="breath-inner"><div class="breath-label" id="breath-label">Settle in…</div><div class="breath-count" id="breath-count"></div></div></div>
       <div class="med-timer" id="med-timer">${mmss(total)}</div>
       <div class="med-controls">
         <button class="secondary-btn" id="med-pause">Pause</button>
@@ -1373,70 +1394,89 @@ function openMeditationPlayer(item, minutes, bg) {
       </div>
     </div>`);
   ov.querySelector(".sheet").classList.add("med-sheet");
-
-  // audio (primed within the Start gesture so scheduled cues can play on iOS)
-  const bell = new Audio("audio/bell/bell.mp3");
-  const voices = {};
-  ["begin", "settle", "breath", "body", "anchor", "wander", "midway", "closing", "end"].forEach((n) => voices[n] = new Audio(`audio/voice/${n}.mp3`));
-  const bgAudio = bg !== "silent" ? new Audio(`audio/bg/${bg}.mp3`) : null;
-  if (bgAudio) { bgAudio.loop = true; bgAudio.volume = 0.35; }
-  const prime = (a) => { try { a.muted = true; a.play().then(() => { a.pause(); a.currentTime = 0; a.muted = false; }).catch(() => { a.muted = false; }); } catch (_) {} };
-  [bell, ...Object.values(voices)].forEach(prime);
-  if (bgAudio) bgAudio.play().catch(() => {});
-
-  const playCue = (c) => { const a = c === "bell" ? bell : voices[c]; if (a) { try { a.currentTime = 0; a.play().catch(() => {}); } catch (_) {} } };
-
-  const timerEl = ov.querySelector("#med-timer");
+  const circle = ov.querySelector("#breath-circle");
   const labelEl = ov.querySelector("#breath-label");
-  let elapsed = 0, paused = false, ticker = null, breathTimer = null, phaseIn = true;
+  const countEl = ov.querySelector("#breath-count");
+  const timerEl = ov.querySelector("#med-timer");
 
-  const startBreath = () => {
-    labelEl.textContent = "Breathe in…"; phaseIn = true;
-    breathTimer = setInterval(() => { phaseIn = !phaseIn; labelEl.textContent = phaseIn ? "Breathe in…" : "Breathe out…"; }, 4000);
-  };
-  const stopAll = () => {
-    clearInterval(ticker); clearInterval(breathTimer);
-    if (bgAudio) { bgAudio.pause(); }
-    [bell, ...Object.values(voices)].forEach((a) => { try { a.pause(); } catch (_) {} });
+  // audio (primed within the Start gesture so cues can play later on iOS)
+  const bell = new Audio("audio/bell/bell.mp3");
+  const clips = {};
+  ["in", "hold", "out", "a_warmup", "a_box", "a_478", "a_balance", "a_coherent", "f_begin", "f_mindful", "f_closing", "f_end"]
+    .forEach((n) => clips[n] = new Audio(`audio/voice/${n}.mp3`));
+  const bgAudio = bg !== "silent" ? new Audio(`audio/bg/${bg}.mp3`) : null;
+  if (bgAudio) { bgAudio.loop = true; bgAudio.volume = 0.3; }
+  const prime = (a) => { try { a.muted = true; a.play().then(() => { a.pause(); a.currentTime = 0; a.muted = false; }).catch(() => { a.muted = false; }); } catch (_) {} };
+  [bell, ...Object.values(clips)].forEach(prime);
+  if (bgAudio) bgAudio.play().catch(() => {});
+  const say = (name) => { const a = name === "bell" ? bell : clips[name]; if (a) { try { a.currentTime = 0; a.play().catch(() => {}); } catch (_) {} } };
+
+  let aborted = false, paused = false, elapsed = 0;
+  const timer = setInterval(() => { if (!paused && !aborted) { elapsed++; timerEl.textContent = mmss(Math.max(0, total - elapsed)); } }, 1000);
+  // pausable + abortable sleep
+  const wait = (ms) => new Promise((res) => {
+    let remaining = ms, last = Date.now();
+    const iv = setInterval(() => {
+      if (aborted) { clearInterval(iv); return res(); }
+      if (paused) { last = Date.now(); return; }
+      const now = Date.now(); remaining -= now - last; last = now;
+      if (remaining <= 0) { clearInterval(iv); res(); }
+    }, 100);
+  });
+  const breatheTo = (scale, secs) => { circle.style.transition = `transform ${secs}s ease-in-out`; circle.style.transform = `scale(${scale})`; };
+
+  async function phase(label, cue, scale, secs) {
+    if (secs <= 0) return;
+    if (cue) say(cue);
+    labelEl.textContent = label;
+    breatheTo(scale, secs);
+    for (let s = secs; s > 0 && !aborted; s--) { countEl.textContent = s; await wait(1000); }
+    countEl.textContent = "";
+  }
+  async function runCycle(p) {
+    await phase("Breathe in", "in", 1.15, p.in);
+    await phase("Hold", "hold", 1.15, p.hold);
+    await phase("Breathe out", "out", 0.7, p.out);
+    await phase("Hold", "hold", 0.7, p.hold2);
+  }
+
+  const cleanup = () => {
+    aborted = true; clearInterval(timer);
+    if (bgAudio) bgAudio.pause();
+    [bell, ...Object.values(clips)].forEach((a) => { try { a.pause(); } catch (_) {} });
   };
   const finish = () => {
-    stopAll();
     const e = loadEntry(currentDs);
     e.checks[item.id] = true;
     if (!e.mins[item.id]) e.mins[item.id] = String(minutes);
     e.updated_at = nowIso(); storeEntry(currentDs, e); markDirty(currentDs); schedulePush();
-    labelEl.textContent = "Done 🙏"; timerEl.textContent = "";
+    labelEl.textContent = "Done 🙏"; countEl.textContent = ""; timerEl.textContent = "";
     toast("Meditation complete ✓");
-    setTimeout(() => { ov.remove(); renderChecklist(); }, 2500);
+    setTimeout(() => { cleanup(); ov.remove(); renderChecklist(); }, 2500);
   };
-  const close = () => { stopAll(); ov.remove(); renderChecklist(); };
-
-  schedule.filter((s) => s.at === 0).forEach((s) => playCue(s.c)); // start bell
-  startBreath();
-  ticker = setInterval(() => {
-    elapsed++;
-    timerEl.textContent = mmss(Math.max(0, total - elapsed));
-    schedule.filter((s) => s.at === elapsed).forEach((s) => playCue(s.c));
-    if (elapsed >= total) finish();
-  }, 1000);
+  const close = () => { cleanup(); ov.remove(); renderChecklist(); };
 
   ov.querySelector("#med-pause").onclick = (ev) => {
     paused = !paused;
     ev.target.textContent = paused ? "Resume" : "Pause";
-    ov.querySelector(".breath-circle").style.animationPlayState = paused ? "paused" : "running";
-    if (paused) { clearInterval(ticker); clearInterval(breathTimer); if (bgAudio) bgAudio.pause(); }
-    else {
-      if (bgAudio) bgAudio.play().catch(() => {});
-      startBreath();
-      ticker = setInterval(() => {
-        elapsed++; timerEl.textContent = mmss(Math.max(0, total - elapsed));
-        schedule.filter((s) => s.at === elapsed).forEach((s) => playCue(s.c));
-        if (elapsed >= total) finish();
-      }, 1000);
-    }
+    circle.style.animationPlayState = paused ? "paused" : "running";
+    if (bgAudio) { paused ? bgAudio.pause() : bgAudio.play().catch(() => {}); }
   };
   ov.querySelector("#med-end").onclick = close;
   ov.querySelector(".med-x").onclick = close;
+
+  // run the session
+  (async () => {
+    say("bell");
+    for (const step of steps) {
+      if (aborted) return;
+      if (step.say) { say(step.say); labelEl.textContent = "…"; await wait(step.dur * 1000); }
+      else if (step.breathe) { const p = PATTERNS[step.breathe]; for (let c = 0; c < step.cycles && !aborted; c++) await runCycle(p); }
+    }
+    if (aborted) return;
+    say("bell");
+    finish();
+  })();
 }
 
 // ===== Wire up UI =====
@@ -1520,7 +1560,7 @@ function bindEvents() {
   setDate(todayYmd());
   // test hook (harmless; only active with ?__test in the URL) — set before async auth so tests don't race it
   if (location.search.includes("__test")) {
-    window.__t = { buildAiSpec, mergeResult, summariseResult, loadEntry, ALL_ITEMS, SPEAKING_SCRIPT, openSpeak, transcribeBlob, showReview, saveRoutine, openRoutineView, openRoutineInput, buildDigest, showSummary, storeEntry };
+    window.__t = { buildAiSpec, mergeResult, summariseResult, loadEntry, ALL_ITEMS, SPEAKING_SCRIPT, openSpeak, transcribeBlob, showReview, saveRoutine, openRoutineView, openRoutineInput, buildDigest, showSummary, storeEntry, buildSession };
   }
   await initAuth();
   if ("serviceWorker" in navigator) {

@@ -22,17 +22,21 @@ if (!key) { console.error("No ELEVENLABS_API_KEY"); process.exit(1); }
 const VOICE = "EXAVITQu4vr4xnSDxMaL";
 const VOICE_SETTINGS = { stability: 0.6, similarity_boost: 0.75, style: 0.0, use_speaker_boost: true };
 
-// short spoken cues (pauses come from the player scheduling them over time)
+// Phase cues (short, spoken at each breath phase, synced to the circle), pattern
+// announcements (spoken once per pattern), and framing lines.
 const CUES = {
-  begin: "Let's begin. Sit comfortably, rest your hands, and gently close your eyes.",
-  settle: "Take a slow breath in through your nose… and let it go.",
-  breath: "Now let your breathing be natural. Simply notice each breath — the air flowing in, and out.",
-  body: "Feel your chest and your stomach gently expand as you breathe in… and soften as you breathe out.",
-  anchor: "Rest your attention here, on the breath. This is the whole practice.",
-  wander: "If your mind has wandered, that's completely okay. Gently, kindly, come back to the breath.",
-  midway: "Nothing to do, nowhere to be. Just this breath… and the next.",
-  closing: "We're coming to a close. Take one last, deeper breath in… and slowly out.",
-  end: "Gently open your eyes when you're ready, and carry this calm with you.",
+  in: "Breathe in.",
+  hold: "Hold.",
+  out: "Breathe out.",
+  a_warmup: "Let's begin gently. Breathe in for four… and out for six.",
+  a_box: "Now, box breathing. In for four, hold for four, out for four, hold for four.",
+  a_478: "Now a calming breath. In for four… hold for seven… and a long, slow out for eight.",
+  a_coherent: "In for five… and out for five. Find a steady, even rhythm.",
+  a_balance: "In for four… hold for three… and out for five.",
+  f_begin: "Let's begin. Settle into a comfortable position, and gently let your eyes close.",
+  f_mindful: "For the next few minutes, be mindful of everything around you, and everything happening within you. Let the breath be your anchor.",
+  f_closing: "Beautiful. Let your breath return to its own natural rhythm.",
+  f_end: "Gently open your eyes when you're ready, and carry this calm with you.",
 };
 
 const BG = {
