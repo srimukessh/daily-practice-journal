@@ -872,10 +872,26 @@ async function processPendingRecordings() {
   try { recs = await idbAll(); } catch (_) { return; }
   for (const r of recs) {
     try {
-      const text = await transcribeBlob(r.blob, r.mime);
-      if (text.trim()) { mergeResult(r.ds, await organise(r.ds, text)); }
+      const text = (await transcribeBlob(r.blob, r.mime)).trim();
+      if (text) {
+        if (r.noteId) {
+          // deferred dictation for a specific text box on a specific day
+          const e = loadEntry(r.ds);
+          const cur = (e.notes[r.noteId] || "").trim();
+          e.notes[r.noteId] = cur ? cur + " " + text : text;
+          e.updated_at = nowIso(); storeEntry(r.ds, e); markDirty(r.ds); schedulePush();
+          toast(`Transcribed your note (${prettyDate(r.ds)})`);
+        } else if (r.context) {
+          const cur = (userContext || "").trim();
+          await saveContext(cur ? cur + " " + text : text);
+          const cta = $("#context"); if (cta) cta.value = userContext;
+          toast("Transcribed into your context");
+        } else {
+          mergeResult(r.ds, await organise(r.ds, text)); // brain-dump
+          toast(`Organised your voice note from ${prettyDate(r.ds)}`);
+        }
+      }
       await idbDelete(r.key);
-      toast(`Organised your voice note from ${prettyDate(r.ds)}`);
     } catch (_) { /* keep for next retry */ }
   }
   renderChecklist();
@@ -983,7 +999,8 @@ function attachRecorder(ov) {
 }
 
 // Add a ChatGPT-style 🎤 button to a textarea: record → Whisper → insert at the cursor.
-// Online-only (Whisper). Offline, the iOS keyboard's own mic does on-device dictation for free.
+// Records fine offline; if there's no signal the audio is stored (IndexedDB) and transcribed
+// straight into this field the moment you're back online — no lost dictation.
 function attachFieldMic(ta) {
   if (!ta || ta.dataset.mic || !(navigator.mediaDevices && window.MediaRecorder)) return;
   ta.dataset.mic = "1";
@@ -995,10 +1012,21 @@ function attachFieldMic(ta) {
   btn.type = "button"; btn.className = "field-mic"; btn.textContent = "🎤"; btn.setAttribute("aria-label", "dictate");
   wrap.appendChild(btn);
 
+  // where a deferred (offline) transcript should land later
+  const target = ta.dataset.note ? { noteId: ta.dataset.note, ds: currentDs }
+    : ta.id === "context" ? { context: true } : null;
+
+  const insertText = (text) => {
+    const cur = ta.value, pos = ta.selectionStart ?? cur.length;
+    const ins = (cur && !/\s$/.test(cur.slice(0, pos)) ? " " : "") + text;
+    ta.value = cur.slice(0, pos) + ins + cur.slice(pos);
+    ta.dispatchEvent(new Event("input", { bubbles: true }));
+    if (ta.classList.contains("log-text")) autoGrow(ta);
+  };
+
   let rec = null, chunks = [], mime = "";
   btn.onclick = async () => {
     if (rec && rec.state === "recording") { rec.stop(); return; }
-    if (!navigator.onLine || !user) return toast("Offline — use the keyboard's 🎤 (works offline)");
     let stream;
     try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
     catch (_) { return toast("Microphone permission needed"); }
@@ -1008,17 +1036,22 @@ function attachFieldMic(ta) {
     rec.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
     rec.onstop = async () => {
       stream.getTracks().forEach((t) => t.stop());
-      btn.classList.remove("recording"); btn.textContent = "🎤"; btn.disabled = true;
-      try {
-        const text = await transcribeBlob(new Blob(chunks, { type: mime || "audio/webm" }), mime);
-        const cur = ta.value, pos = ta.selectionStart ?? cur.length;
-        const insert = (cur && !/\s$/.test(cur.slice(0, pos)) ? " " : "") + text;
-        ta.value = cur.slice(0, pos) + insert + cur.slice(pos);
-        ta.dispatchEvent(new Event("input", { bubbles: true }));
-        if (ta.classList.contains("log-text")) autoGrow(ta);
-        ta.focus();
-      } catch (_) { toast("Couldn't transcribe"); }
-      finally { btn.disabled = false; }
+      btn.classList.remove("recording"); btn.textContent = "🎤";
+      const blob = new Blob(chunks, { type: mime || "audio/webm" });
+      // Online: transcribe now, insert into the box. Offline: queue it for this field.
+      if (navigator.onLine && user) {
+        btn.disabled = true;
+        try { insertText(await transcribeBlob(blob, mime)); ta.focus(); }
+        catch (_) {
+          if (target) { await idbAdd({ ...target, mime: blob.type, blob, created: nowIso() }); toast("Saved — will transcribe when online"); }
+          else toast("Couldn't transcribe");
+        } finally { btn.disabled = false; }
+      } else if (target) {
+        try { await idbAdd({ ...target, mime: blob.type, blob, created: nowIso() }); } catch (_) {}
+        toast("Voice note saved — will transcribe when back online");
+      } else {
+        toast("Offline — use the keyboard's 🎤 (works offline)");
+      }
     };
     rec.start(); btn.classList.add("recording"); btn.textContent = "⏹";
   };

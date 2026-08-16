@@ -45,12 +45,13 @@ Deno.serve(async (req: Request) => {
       "Return ONLY JSON matching the schema.",
     ].join("\n");
 
+    // Reasoning model for a genuinely thoughtful review (no temperature param on o-series).
     const r = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
       body: JSON.stringify({
-        model: "gpt-4o-mini",
-        temperature: 0.4,
+        model: "o4-mini",
+        reasoning_effort: "high",
         messages: [{ role: "system", content: system }, { role: "user", content: String(digest) }],
         response_format: { type: "json_schema", json_schema: { name: "summary", strict: true, schema: SCHEMA } },
       }),
