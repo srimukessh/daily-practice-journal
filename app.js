@@ -12,8 +12,8 @@ const SECTIONS = [
       { id: "intention", label: "Set intention", sleep: true,
         hint: "Take a moment — what do you want to be mindful of today? Log your sleep: under 7h, go easy on alcohol today.",
         notes: [{ id: "intention_note", label: "Today's intention (optional)", ph: "What do I want to be mindful of today?" }] },
-      { id: "concentration", label: "Concentration meditation", minutes: true,
-        hint: "Focus on the breath. When the mind wanders, notice it and gently return." },
+      { id: "concentration", label: "Concentration meditation", minutes: true, guided: true,
+        hint: "Focus on the breath. When the mind wanders, notice it and gently return. Tap “Begin” for a guided session." },
       { id: "analytical", label: "Analytical meditation", minutes: true, routine: true,
         hint: "Bring up a mild example, notice it in the body, understand what you're wanting, and practise tolerating the feeling without needing to act. Tap “Guide me” for a step-by-step routine.",
         select: { id: "analytical_theme", label: "Theme for today",
@@ -284,6 +284,15 @@ function renderItem(item, entry) {
       r.querySelector(".routine-btn").onclick = () => openRoutineInput(item);
     }
     el.appendChild(r);
+  }
+
+  // guided concentration session
+  if (item.guided) {
+    const g = document.createElement("div");
+    g.className = "routine-row";
+    g.innerHTML = `<button class="routine-btn">🧘 Begin guided session</button>`;
+    g.querySelector(".routine-btn").onclick = () => openMeditationSetup(item);
+    el.appendChild(g);
   }
 
   // sub-check chips (opponent powers)
@@ -1303,6 +1312,131 @@ function openRoutineView(item) {
   ov.querySelector(".sheet-x").onclick = close;
   ov.querySelector("#rt-close").onclick = close;
   ov.querySelector("#rt-regen").onclick = () => { stop(); ov.remove(); openRoutineInput(item); };
+}
+
+// ===== Guided concentration meditation (audio player) =====
+function cueSchedule(minutes) {
+  if (minutes <= 3) return [
+    { at: 0, c: "bell" }, { at: 3, c: "begin" }, { at: 14, c: "settle" }, { at: 28, c: "breath" }, { at: 50, c: "body" },
+    { at: 78, c: "anchor" }, { at: 120, c: "wander" }, { at: 158, c: "closing" }, { at: 171, c: "end" }, { at: 176, c: "bell" }];
+  if (minutes <= 5) return [
+    { at: 0, c: "bell" }, { at: 3, c: "begin" }, { at: 14, c: "settle" }, { at: 30, c: "breath" }, { at: 55, c: "body" },
+    { at: 90, c: "anchor" }, { at: 150, c: "wander" }, { at: 210, c: "midway" }, { at: 255, c: "wander" }, { at: 280, c: "closing" }, { at: 293, c: "end" }, { at: 297, c: "bell" }];
+  return [
+    { at: 0, c: "bell" }, { at: 3, c: "begin" }, { at: 15, c: "settle" }, { at: 35, c: "breath" }, { at: 70, c: "body" },
+    { at: 120, c: "anchor" }, { at: 200, c: "wander" }, { at: 280, c: "midway" }, { at: 360, c: "anchor" }, { at: 440, c: "wander" },
+    { at: 520, c: "midway" }, { at: 575, c: "closing" }, { at: 590, c: "end" }, { at: 596, c: "bell" }];
+}
+
+function openMeditationSetup(item) {
+  let mins = 5, bg = "rain";
+  const ov = buildOverlay(`
+    <div class="sheet-head"><h2>Concentration meditation</h2><button class="sheet-x" aria-label="close">×</button></div>
+    <label class="rev-h">Length</label>
+    <div class="range-chips" id="med-durs">
+      <button class="range-chip" data-m="3">3 min</button>
+      <button class="range-chip on" data-m="5">5 min</button>
+      <button class="range-chip" data-m="10">10 min</button>
+    </div>
+    <label class="rev-h" style="margin-top:14px;display:block">Background</label>
+    <div class="range-chips wrap" id="med-bgs">
+      <button class="range-chip on" data-bg="rain">🌧 Rain</button>
+      <button class="range-chip" data-bg="ocean">🌊 Ocean</button>
+      <button class="range-chip" data-bg="spiritual">🕉 Spiritual</button>
+      <button class="range-chip" data-bg="silent">Silent</button>
+    </div>
+    <div class="sheet-actions">
+      <button class="secondary-btn" id="med-cancel">Cancel</button>
+      <button class="primary-btn" id="med-start">Begin</button>
+    </div>`);
+  const pick = (sel, set) => ov.querySelectorAll(sel).forEach((c) => c.onclick = () => {
+    ov.querySelectorAll(sel).forEach((x) => x.classList.remove("on")); c.classList.add("on"); set(c);
+  });
+  pick("#med-durs .range-chip", (c) => mins = +c.dataset.m);
+  pick("#med-bgs .range-chip", (c) => bg = c.dataset.bg);
+  ov.querySelector(".sheet-x").onclick = () => ov.remove();
+  ov.querySelector("#med-cancel").onclick = () => ov.remove();
+  ov.querySelector("#med-start").onclick = () => { ov.remove(); openMeditationPlayer(item, mins, bg); };
+}
+
+function openMeditationPlayer(item, minutes, bg) {
+  const total = minutes * 60;
+  const schedule = cueSchedule(minutes);
+  const ov = buildOverlay(`
+    <div class="med-player">
+      <button class="sheet-x med-x" aria-label="close">×</button>
+      <div class="breath-wrap"><div class="breath-circle"></div><div class="breath-label" id="breath-label">Settle in…</div></div>
+      <div class="med-timer" id="med-timer">${mmss(total)}</div>
+      <div class="med-controls">
+        <button class="secondary-btn" id="med-pause">Pause</button>
+        <button class="secondary-btn" id="med-end">End</button>
+      </div>
+    </div>`);
+  ov.querySelector(".sheet").classList.add("med-sheet");
+
+  // audio (primed within the Start gesture so scheduled cues can play on iOS)
+  const bell = new Audio("audio/bell/bell.mp3");
+  const voices = {};
+  ["begin", "settle", "breath", "body", "anchor", "wander", "midway", "closing", "end"].forEach((n) => voices[n] = new Audio(`audio/voice/${n}.mp3`));
+  const bgAudio = bg !== "silent" ? new Audio(`audio/bg/${bg}.mp3`) : null;
+  if (bgAudio) { bgAudio.loop = true; bgAudio.volume = 0.35; }
+  const prime = (a) => { try { a.muted = true; a.play().then(() => { a.pause(); a.currentTime = 0; a.muted = false; }).catch(() => { a.muted = false; }); } catch (_) {} };
+  [bell, ...Object.values(voices)].forEach(prime);
+  if (bgAudio) bgAudio.play().catch(() => {});
+
+  const playCue = (c) => { const a = c === "bell" ? bell : voices[c]; if (a) { try { a.currentTime = 0; a.play().catch(() => {}); } catch (_) {} } };
+
+  const timerEl = ov.querySelector("#med-timer");
+  const labelEl = ov.querySelector("#breath-label");
+  let elapsed = 0, paused = false, ticker = null, breathTimer = null, phaseIn = true;
+
+  const startBreath = () => {
+    labelEl.textContent = "Breathe in…"; phaseIn = true;
+    breathTimer = setInterval(() => { phaseIn = !phaseIn; labelEl.textContent = phaseIn ? "Breathe in…" : "Breathe out…"; }, 4000);
+  };
+  const stopAll = () => {
+    clearInterval(ticker); clearInterval(breathTimer);
+    if (bgAudio) { bgAudio.pause(); }
+    [bell, ...Object.values(voices)].forEach((a) => { try { a.pause(); } catch (_) {} });
+  };
+  const finish = () => {
+    stopAll();
+    const e = loadEntry(currentDs);
+    e.checks[item.id] = true;
+    if (!e.mins[item.id]) e.mins[item.id] = String(minutes);
+    e.updated_at = nowIso(); storeEntry(currentDs, e); markDirty(currentDs); schedulePush();
+    labelEl.textContent = "Done 🙏"; timerEl.textContent = "";
+    toast("Meditation complete ✓");
+    setTimeout(() => { ov.remove(); renderChecklist(); }, 2500);
+  };
+  const close = () => { stopAll(); ov.remove(); renderChecklist(); };
+
+  schedule.filter((s) => s.at === 0).forEach((s) => playCue(s.c)); // start bell
+  startBreath();
+  ticker = setInterval(() => {
+    elapsed++;
+    timerEl.textContent = mmss(Math.max(0, total - elapsed));
+    schedule.filter((s) => s.at === elapsed).forEach((s) => playCue(s.c));
+    if (elapsed >= total) finish();
+  }, 1000);
+
+  ov.querySelector("#med-pause").onclick = (ev) => {
+    paused = !paused;
+    ev.target.textContent = paused ? "Resume" : "Pause";
+    ov.querySelector(".breath-circle").style.animationPlayState = paused ? "paused" : "running";
+    if (paused) { clearInterval(ticker); clearInterval(breathTimer); if (bgAudio) bgAudio.pause(); }
+    else {
+      if (bgAudio) bgAudio.play().catch(() => {});
+      startBreath();
+      ticker = setInterval(() => {
+        elapsed++; timerEl.textContent = mmss(Math.max(0, total - elapsed));
+        schedule.filter((s) => s.at === elapsed).forEach((s) => playCue(s.c));
+        if (elapsed >= total) finish();
+      }, 1000);
+    }
+  };
+  ov.querySelector("#med-end").onclick = close;
+  ov.querySelector(".med-x").onclick = close;
 }
 
 // ===== Wire up UI =====

@@ -295,6 +295,24 @@ button { font-family: inherit; cursor: pointer; }
 }
 .context-box:focus, .sheet select:focus, #rt-sit:focus { border-color: var(--indigo); background: var(--field-strong); }
 
+/* guided concentration meditation player */
+.range-chips.wrap { flex-wrap: wrap; }
+.range-chips.wrap .range-chip { flex: 1 1 40%; }
+.med-sheet { min-height: 92dvh; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.med-player { display: flex; flex-direction: column; align-items: center; gap: 30px; width: 100%; position: relative; }
+.med-x { position: absolute; top: -8px; right: 0; background: var(--indigo-soft); color: var(--indigo); }
+.breath-wrap { display: grid; place-items: center; height: 230px; }
+.breath-circle {
+  grid-area: 1 / 1; width: 170px; height: 170px; border-radius: 50%;
+  background: radial-gradient(circle at 50% 35%, var(--indigo), var(--indigo-dark));
+  box-shadow: 0 0 70px rgba(124,140,255,.45); animation: breathe 8s ease-in-out infinite;
+}
+@keyframes breathe { 0%, 100% { transform: scale(.68); } 50% { transform: scale(1.15); } }
+.breath-label { grid-area: 1 / 1; z-index: 1; color: #fff; font-weight: 600; font-size: 1.05rem; text-shadow: 0 1px 8px rgba(0,0,0,.45); }
+.med-timer { font-size: 2.1rem; font-weight: 800; font-variant-numeric: tabular-nums; color: var(--ink); }
+.med-controls { display: flex; gap: 12px; width: 100%; }
+.med-controls .secondary-btn { flex: 1; margin-bottom: 0; }
+
 .reminder-line {
   text-align: center; font-style: italic; color: var(--muted);
   margin: 22px 8px; font-size: .92rem;

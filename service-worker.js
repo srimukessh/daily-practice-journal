@@ -1,5 +1,10 @@
 /* Offline app-shell cache. Bump CACHE when you change static files to force an update. */
-const CACHE = "daily-practice-v20";
+const CACHE = "daily-practice-v21";
+const MED_AUDIO = [
+  "begin", "settle", "breath", "body", "anchor", "wander", "midway", "closing", "end",
+].map((n) => `./audio/voice/${n}.mp3`)
+  .concat(["rain", "ocean", "spiritual"].map((n) => `./audio/bg/${n}.mp3`))
+  .concat(["./audio/bell/bell.mp3"]);
 const SHELL = [
   "./",
   "./index.html",
@@ -11,6 +16,7 @@ const SHELL = [
   "./icons/icon-192.png",
   "./icons/icon-512.png",
   "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js",
+  ...MED_AUDIO,
 ];
 
 self.addEventListener("install", (e) => {
