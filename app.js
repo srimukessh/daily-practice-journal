@@ -89,10 +89,11 @@ function loadEntry(ds) {
       if (!e.logs) e.logs = {};   // back-compat for entries saved before logs existed
       if (!e.mins) e.mins = {};   // back-compat for entries saved before minutes existed
       if (!("routine" in e)) e.routine = null;
+      if (!("dump" in e)) e.dump = "";   // raw "speak/paste your day" text, kept for summaries
       return e;
     } catch (_) {}
   }
-  return { checks: {}, notes: {}, logs: {}, mins: {}, routine: null, updated_at: null };
+  return { checks: {}, notes: {}, logs: {}, mins: {}, routine: null, dump: "", updated_at: null };
 }
 function storeEntry(ds, entry) { localStorage.setItem(LKEY(ds), JSON.stringify(entry)); }
 function allLocalDates() {
@@ -407,6 +408,15 @@ function editLog(id, idx, text) {
   mutate((e) => { if (e.logs[id] && e.logs[id][idx]) e.logs[id][idx].text = text; });
 }
 function autoGrow(el) { el.style.height = "auto"; el.style.height = el.scrollHeight + "px"; }
+// keep the raw "speak/paste your day" text on the entry (used by summaries)
+function appendDump(ds, text) {
+  const t = (text || "").trim();
+  if (!t) return;
+  const e = loadEntry(ds);
+  e.dump = e.dump ? e.dump.trim() + "\n\n" + t : t;
+  e.updated_at = nowIso();
+  storeEntry(ds, e); markDirty(ds); schedulePush();
+}
 function hhmm(iso) {
   try { return new Date(iso).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" }); }
   catch (_) { return ""; }
@@ -569,7 +579,7 @@ async function pushDirty() {
       const e = loadEntry(ds);
       const { error } = await sb.from("entries").upsert({
         user_id: user.id, entry_date: ds,
-        data: { checks: e.checks, notes: e.notes, logs: e.logs || {}, mins: e.mins || {}, routine: e.routine || null },
+        data: { checks: e.checks, notes: e.notes, logs: e.logs || {}, mins: e.mins || {}, routine: e.routine || null, dump: e.dump || "" },
         updated_at: e.updated_at || nowIso(),
       }, { onConflict: "user_id,entry_date" });
       if (error) throw error;
@@ -594,7 +604,7 @@ async function pullAll() {
       const remoteTime = row.updated_at ? Date.parse(row.updated_at) : 0;
       const localTime = local.updated_at ? Date.parse(local.updated_at) : 0;
       if (remoteTime >= localTime) {
-        storeEntry(ds, { checks: row.data.checks || {}, notes: row.data.notes || {}, logs: row.data.logs || {}, mins: row.data.mins || {}, routine: row.data.routine || null, updated_at: row.updated_at });
+        storeEntry(ds, { checks: row.data.checks || {}, notes: row.data.notes || {}, logs: row.data.logs || {}, mins: row.data.mins || {}, routine: row.data.routine || null, dump: row.data.dump || "", updated_at: row.updated_at });
       }
     }
     setSyncState("synced");
@@ -897,6 +907,7 @@ async function processPendingRecordings() {
           const cta = $("#context"); if (cta) cta.value = userContext;
           toast("Transcribed into your context");
         } else {
+          appendDump(r.ds, text); // keep raw text for summaries
           mergeResult(r.ds, await organise(r.ds, text)); // brain-dump
           toast(`Organised your voice note from ${prettyDate(r.ds)}`);
         }
@@ -937,6 +948,7 @@ function openSpeak() {
   ov.querySelector("#dump-go").onclick = async () => {
     const text = ov.querySelector("#dump").value.trim();
     if (!text) return toast("Nothing to organise yet");
+    appendDump(currentDs, text); // keep the raw text on the day for summaries
     ov.remove();
     if (!navigator.onLine || !user) { queueDump(currentDs, text); return toast("Saved — will organise when online"); }
     const load = buildOverlay(`<div class="loading"><div class="spinner"></div><p>Organising your day…</p></div>`);
@@ -1156,6 +1168,7 @@ function buildDigest(days) {
       if (it.log && (e.logs[it.id] || []).length) parts.push(`${it.label}: ${e.logs[it.id].map((x) => x.text).join(" | ")}`);
       if (it.notes) for (const n of it.notes) { const v = (e.notes[n.id] || "").trim(); if (v) parts.push(`${n.label}: ${v}`); }
     }
+    if (e.dump && e.dump.trim()) parts.push(`Journal: ${e.dump.trim()}`);
     if (parts.length) lines.push(`${ds}: ${parts.join("; ")}`);
   }
   return lines.join("\n");
