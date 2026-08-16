@@ -1054,6 +1054,61 @@ function showReview(ds, result) {
   };
 }
 
+// ===== Windowed summaries (reflect over the last N days) =====
+function buildDigest(days) {
+  const lines = [];
+  for (let i = days - 1; i >= 0; i--) {
+    const ds = ymd(new Date(Date.now() - i * 864e5));
+    const e = loadEntry(ds);
+    const parts = [];
+    for (const it of ALL_ITEMS) {
+      if (!it.group && !it.log && e.checks[it.id]) parts.push(`${it.label}✓`);
+      if (it.minutes && e.mins[it.id]) parts.push(`${it.label} ${e.mins[it.id]}m`);
+      if (it.sleep && e.mins.sleep) parts.push(`sleep ${e.mins.sleep}h`);
+      if (it.select && e.notes[it.select.id]) parts.push(`${it.select.label}: ${e.notes[it.select.id]}`);
+      if (it.multiselect && (e.notes[it.multiselect.id] || []).length) parts.push(`${it.multiselect.label}: ${e.notes[it.multiselect.id].join(", ")}`);
+      if (it.log && (e.logs[it.id] || []).length) parts.push(`${it.label}: ${e.logs[it.id].map((x) => x.text).join(" | ")}`);
+      if (it.notes) for (const n of it.notes) { const v = (e.notes[n.id] || "").trim(); if (v) parts.push(`${n.label}: ${v}`); }
+    }
+    if (parts.length) lines.push(`${ds}: ${parts.join("; ")}`);
+  }
+  return lines.join("\n");
+}
+
+async function openSummary(days) {
+  if (!SYNC_ON || !user) return toast("Sign in to use summaries");
+  if (!navigator.onLine) return toast("Needs internet to summarise");
+  const digest = buildDigest(days);
+  if (!digest.trim()) return toast("No entries in this range yet");
+  const load = buildOverlay(`<div class="loading"><div class="spinner"></div><p>Reflecting on your last ${days} days…</p></div>`);
+  try {
+    const { data, error } = await sb.functions.invoke("summarise", { body: { rangeLabel: `the last ${days} days`, digest } });
+    if (error) throw error;
+    if (!data || data.error || !data.result) throw new Error(data && data.error ? data.error : "no result");
+    load.remove();
+    showSummary(days, data.result);
+  } catch (e) { load.remove(); toast("Couldn't generate summary"); console.warn("summarise failed", e); }
+}
+
+function showSummary(days, r) {
+  const mk = (title, key) => (r[key] && r[key].length) ? `<div class="sum-sec"><div class="sum-h">${title}</div><ul class="sum-list" data-k="${key}"></ul></div>` : "";
+  const ov = buildOverlay(`
+    <div class="sheet-head"><h2>Last ${days} days</h2><button class="sheet-x" aria-label="close">×</button></div>
+    <p class="sheet-sub sum-overview"></p>
+    ${mk("What went well", "went_well")}
+    ${mk("What was hard", "struggled")}
+    ${mk("Patterns", "patterns")}
+    ${r.suggestion ? `<div class="sum-sec"><div class="sum-h">One thing to try</div><p class="sum-suggest"></p></div>` : ""}
+    <div class="sheet-actions"><button class="primary-btn" id="sum-close">Close</button></div>`);
+  ov.querySelector(".sum-overview").textContent = r.overview || "";
+  ov.querySelectorAll(".sum-list").forEach((ul) => {
+    (r[ul.dataset.k] || []).forEach((t) => { const li = document.createElement("li"); li.textContent = t; ul.appendChild(li); });
+  });
+  if (r.suggestion) ov.querySelector(".sum-suggest").textContent = r.suggestion;
+  ov.querySelector(".sheet-x").onclick = () => ov.remove();
+  ov.querySelector("#sum-close").onclick = () => ov.remove();
+}
+
 // ===== Analytical-meditation guided routine =====
 function saveRoutine(routine) {
   const e = loadEntry(currentDs);
@@ -1149,6 +1204,12 @@ function bindEvents() {
   $("#speak-btn").onclick = openSpeak;
   $("#export-btn").onclick = exportJson;
   $("#sync-now").onclick = syncNow;
+  let summaryDays = 7;
+  document.querySelectorAll(".range-chip").forEach((c) => c.onclick = () => {
+    document.querySelectorAll(".range-chip").forEach((x) => x.classList.remove("on"));
+    c.classList.add("on"); summaryDays = +c.dataset.days;
+  });
+  $("#summarise-btn").onclick = () => openSummary(summaryDays);
   $("#context").addEventListener("input", (e) => { userContext = e.target.value; });
   $("#context").addEventListener("blur", (e) => saveContext(e.target.value.trim()));
   $("#signout-btn").onclick = async () => { if (sb) await sb.auth.signOut(); location.reload(); };
@@ -1208,7 +1269,7 @@ function bindEvents() {
   setDate(todayYmd());
   // test hook (harmless; only active with ?__test in the URL) — set before async auth so tests don't race it
   if (location.search.includes("__test")) {
-    window.__t = { buildAiSpec, mergeResult, summariseResult, loadEntry, ALL_ITEMS, SPEAKING_SCRIPT, openSpeak, transcribeBlob, showReview, saveRoutine, openRoutineView, openRoutineInput };
+    window.__t = { buildAiSpec, mergeResult, summariseResult, loadEntry, ALL_ITEMS, SPEAKING_SCRIPT, openSpeak, transcribeBlob, showReview, saveRoutine, openRoutineView, openRoutineInput, buildDigest, showSummary, storeEntry };
   }
   await initAuth();
   if ("serviceWorker" in navigator) {

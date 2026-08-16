@@ -315,6 +315,19 @@ button { font-family: inherit; cursor: pointer; }
 }
 .cal-legend { text-align: center; color: var(--muted); font-size: .78rem; margin-top: 14px; }
 
+/* windowed summaries */
+.summary-cta { margin-top: 22px; border-top: 1px solid var(--line); padding-top: 16px; }
+.sum-title { font-size: 1rem; margin: 0 0 4px; }
+.range-chips { display: flex; gap: 8px; margin: 10px 0; }
+.range-chip { flex: 1; border: 1px solid var(--line); background: var(--card); color: var(--muted); border-radius: 10px; padding: 10px; font-weight: 600; font-size: .85rem; }
+.range-chip.on { background: var(--indigo); color: #fff; border-color: var(--indigo); }
+.sum-overview { color: var(--ink); }
+.sum-sec { margin: 14px 0; }
+.sum-h { font-size: .74rem; text-transform: uppercase; letter-spacing: .05em; color: var(--indigo); font-weight: 700; margin-bottom: 6px; }
+.sum-list { margin: 0; padding-left: 18px; }
+.sum-list li { margin-bottom: 6px; font-size: .92rem; }
+.sum-suggest { font-size: .95rem; background: var(--indigo-soft); color: var(--ink); padding: 11px 13px; border-radius: 10px; margin: 0; }
+
 /* ===== Settings ===== */
 .settings h2 { font-size: 1rem; margin: 20px 0 8px; }
 .settings-hint { color: var(--muted); font-size: .84rem; margin: 4px 0 12px; }
