@@ -1233,40 +1233,76 @@ function openRoutineInput(item) {
   setTimeout(() => ov.querySelector("#rt-sit").focus(), 50);
 }
 
+// a step can be a plain string (old routines) or { text, seconds } (timed)
+function stepText(s) { return typeof s === "string" ? s : (s && s.text) || ""; }
+function stepSecs(s) { return (s && typeof s === "object" && s.seconds) ? s.seconds : 60; }
+function mmss(sec) { return `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")}`; }
+
 function openRoutineView(item) {
   const rt = loadEntry(currentDs).routine;
   if (!rt || !(rt.steps && rt.steps.length)) return openRoutineInput(item);
-  const stepsHtml = rt.steps.map((_, i) =>
-    `<button class="step" data-i="${i}"><span class="step-num">${i + 1}</span><span class="step-text"></span><span class="step-tick">✓</span></button>`).join("");
+  const stepsHtml = rt.steps.map((s, i) =>
+    `<button class="step" data-i="${i}"><span class="step-num">${i + 1}</span><span class="step-text"></span><span class="step-time"></span></button>`).join("");
   const sub = [rt.theme, rt.situation].filter(Boolean).join(" · ");
   const ov = buildOverlay(`
     <div class="sheet-head"><h2>Analytical meditation</h2><button class="sheet-x" aria-label="close">×</button></div>
     ${sub ? `<p class="sheet-sub"></p>` : ""}
+    <p class="sheet-sub" style="margin-top:0">Tap a step to begin — it completes when its time is up. Tap again to pause.</p>
     <div class="steps">${stepsHtml}</div>
     <div class="sheet-actions">
       <button class="secondary-btn" id="rt-close">Close</button>
       <button class="secondary-btn" id="rt-regen">New routine</button>
     </div>`);
   if (sub) ov.querySelector(".sheet-sub").textContent = sub;
-  const steps = ov.querySelectorAll(".step");
-  steps.forEach((btn, i) => {
-    btn.querySelector(".step-text").textContent = rt.steps[i];
-    btn.classList.toggle("done", !!rt.done[i]);
+
+  const stepEls = [...ov.querySelectorAll(".step")];
+  let activeIdx = -1, remaining = 0, ticker = null;
+
+  const paint = () => {
+    stepEls.forEach((btn, i) => {
+      btn.classList.toggle("done", !!rt.done[i]);
+      btn.classList.toggle("active", i === activeIdx);
+      btn.querySelector(".step-text").textContent = stepText(rt.steps[i]);
+      const timeEl = btn.querySelector(".step-time");
+      if (i === activeIdx) timeEl.textContent = mmss(remaining);
+      else if (rt.done[i]) timeEl.textContent = "✓";
+      else timeEl.textContent = mmss(stepSecs(rt.steps[i]));
+    });
+  };
+  const stop = () => { if (ticker) { clearInterval(ticker); ticker = null; } };
+  const complete = (i) => {
+    stop(); activeIdx = -1; rt.done[i] = true; saveRoutine(rt); paint();
+    if (rt.done.every(Boolean)) {
+      const e = loadEntry(currentDs);
+      e.checks[item.id] = true;
+      const total = Math.round(rt.steps.reduce((a, s) => a + stepSecs(s), 0) / 60);
+      if (total && !e.mins[item.id]) e.mins[item.id] = String(total); // log minutes spent
+      e.updated_at = nowIso(); storeEntry(currentDs, e); markDirty(currentDs); schedulePush();
+      toast("Meditation complete ✓");
+    }
+  };
+  const startStep = (i) => {
+    stop();
+    activeIdx = i; remaining = stepSecs(rt.steps[i]); paint();
+    ticker = setInterval(() => {
+      remaining -= 1;
+      if (remaining <= 0) complete(i); else paint();
+    }, 1000);
+  };
+
+  stepEls.forEach((btn, i) => {
     btn.onclick = () => {
-      rt.done[i] = !rt.done[i];
-      btn.classList.toggle("done", rt.done[i]);
-      saveRoutine(rt);
-      if (rt.done.every(Boolean)) {
-        const e = loadEntry(currentDs); e.checks[item.id] = true; e.updated_at = nowIso();
-        storeEntry(currentDs, e); markDirty(currentDs); schedulePush();
-        toast("Meditation complete ✓");
-      }
+      if (rt.done[i]) return;               // already done
+      if (activeIdx === i) { stop(); activeIdx = -1; paint(); return; } // pause
+      startStep(i);                          // start / switch
     };
   });
-  const close = () => { ov.remove(); renderChecklist(); };
+  paint();
+
+  const close = () => { stop(); ov.remove(); renderChecklist(); };
   ov.querySelector(".sheet-x").onclick = close;
   ov.querySelector("#rt-close").onclick = close;
-  ov.querySelector("#rt-regen").onclick = () => { ov.remove(); openRoutineInput(item); };
+  ov.querySelector("#rt-regen").onclick = () => { stop(); ov.remove(); openRoutineInput(item); };
 }
 
 // ===== Wire up UI =====

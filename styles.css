@@ -281,11 +281,14 @@ button { font-family: inherit; cursor: pointer; }
 }
 .step-num { width: 24px; height: 24px; border-radius: 50%; background: var(--indigo-soft); color: var(--indigo); font-weight: 700; font-size: .8rem; display: grid; place-items: center; }
 .step-text { font-size: .95rem; color: var(--ink); line-height: 1.4; }
-.step-tick { opacity: 0; color: var(--good); font-weight: 800; font-size: 1.1rem; }
+.step-time { font-size: .82rem; color: var(--muted); font-variant-numeric: tabular-nums; font-weight: 600; min-width: 34px; text-align: right; }
+.step.active { border-color: var(--indigo); background: var(--indigo-soft); }
+.step.active .step-num { background: var(--indigo); color: #fff; }
+.step.active .step-time { color: var(--indigo); }
 .step.done { background: linear-gradient(180deg, rgba(16,185,129,.10), transparent); border-color: #bfe7d5; }
 .step.done .step-num { background: var(--good); color: #fff; }
 .step.done .step-text { color: var(--muted); }
-.step.done .step-tick { opacity: 1; }
+.step.done .step-time { color: var(--good); }
 .context-box, .sheet select, #rt-sit {
   width: 100%; border: 1px solid var(--line); border-radius: 10px; padding: 10px;
   font: inherit; font-size: .95rem; background: var(--field); color: var(--ink); outline: none; resize: vertical;

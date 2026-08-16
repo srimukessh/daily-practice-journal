@@ -15,7 +15,17 @@ function json(payload: unknown, status = 200): Response {
 
 const SCHEMA = {
   type: "object",
-  properties: { steps: { type: "array", items: { type: "string" } } },
+  properties: {
+    steps: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: { text: { type: "string" }, seconds: { type: "integer" } },
+        required: ["text", "seconds"],
+        additionalProperties: false,
+      },
+    },
+  },
   required: ["steps"],
   additionalProperties: false,
 };
@@ -34,6 +44,7 @@ Deno.serve(async (req: Request) => {
       "Ground the steps in this arc: bring up a concrete but mild example; notice where the feeling sits in the body; ask what you're actually wanting underneath; consider the other side's view; see that you can be okay even if it doesn't change; practise letting the feeling be there without acting on it; close with a breath or a resolve.",
       "Use the standing context to make it personal (e.g. if they're going through a breakup, speak to that), but don't be heavy-handed.",
       "Each step: ONE short, concrete, second-person instruction (e.g. \"Bring the moment to mind and let yourself feel the sting.\"). Warm, calm, specific. No numbering, no preamble.",
+      "Give each step a `seconds` duration to sit with it — usually 30–120s, longer for the deeper middle steps — so the whole session runs about 4–7 minutes.",
       "Return ONLY JSON matching the schema, with 5–6 steps.",
     ].join("\n");
 
@@ -52,7 +63,10 @@ Deno.serve(async (req: Request) => {
     const data = await r.json();
     if (!r.ok) return json({ error: data?.error?.message || "OpenAI request failed" }, 502);
     const parsed = JSON.parse(data.choices?.[0]?.message?.content || "{}");
-    const steps = (parsed.steps || []).map((s: string) => String(s).trim()).filter(Boolean).slice(0, 6);
+    const steps = (parsed.steps || [])
+      .map((s: any) => ({ text: String(s.text || "").trim(), seconds: Math.max(15, Math.min(300, Number(s.seconds) || 60)) }))
+      .filter((s: any) => s.text)
+      .slice(0, 6);
     return json({ steps }, 200);
   } catch (e) {
     return json({ error: String(e) }, 500);
