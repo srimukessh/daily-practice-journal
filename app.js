@@ -1394,7 +1394,7 @@ function openMeditationSetup(item) {
 }
 
 function openMeditationPlayer(item, minutes, bg) {
-  const { steps, total } = buildSession(minutes);
+  const total = minutes * 60; // exact selected length — the clock is authoritative
   const ov = buildOverlay(`
     <div class="med-player">
       <button class="sheet-x med-x" aria-label="close">×</button>
@@ -1423,9 +1423,15 @@ function openMeditationPlayer(item, minutes, bg) {
   [bell, ...Object.values(clips)].forEach(prime);
   if (bgAudio) bgAudio.play().catch(() => {});
   const say = (name) => { const a = name === "bell" ? bell : clips[name]; if (a) { try { a.currentTime = 0; a.play().catch(() => {}); } catch (_) {} } };
+  const sayFor = async (name, secs) => { say(name); labelEl.textContent = "…"; countEl.textContent = ""; await wait(secs * 1000); };
 
   let aborted = false, paused = false, elapsed = 0;
-  const timer = setInterval(() => { if (!paused && !aborted) { elapsed++; timerEl.textContent = mmss(Math.max(0, total - elapsed)); } }, 1000);
+  const timer = setInterval(() => {
+    if (paused || aborted) return;
+    elapsed++;
+    timerEl.textContent = mmss(Math.max(0, total - elapsed));
+    if (elapsed >= total) { clearInterval(timer); finish(); }
+  }, 1000);
   // pausable + abortable sleep
   const wait = (ms) => new Promise((res) => {
     let remaining = ms, last = Date.now();
@@ -1459,11 +1465,15 @@ function openMeditationPlayer(item, minutes, bg) {
     [bell, ...Object.values(clips)].forEach((a) => { try { a.pause(); } catch (_) {} });
   };
   const finish = () => {
+    if (aborted) return;
+    aborted = true; clearInterval(timer);
+    if (bgAudio) bgAudio.pause();
+    say("bell");
     const e = loadEntry(currentDs);
     e.checks[item.id] = true;
     if (!e.mins[item.id]) e.mins[item.id] = String(minutes);
     e.updated_at = nowIso(); storeEntry(currentDs, e); markDirty(currentDs); schedulePush();
-    labelEl.textContent = "Done 🙏"; countEl.textContent = ""; timerEl.textContent = "";
+    labelEl.textContent = "Done 🙏"; countEl.textContent = ""; timerEl.textContent = "0:00";
     toast("Meditation complete ✓");
     setTimeout(() => { cleanup(); ov.remove(); renderChecklist(); }, 2500);
   };
@@ -1478,17 +1488,24 @@ function openMeditationPlayer(item, minutes, bg) {
   ov.querySelector("#med-end").onclick = close;
   ov.querySelector(".med-x").onclick = close;
 
-  // run the session
+  // run the session — fills exactly to `total`; the clock (above) calls finish() at 0
   (async () => {
+    const CLOSE = 15;                 // seconds reserved at the end for the closing line
     say("bell");
-    for (const step of steps) {
-      if (aborted) return;
-      if (step.say) { say(step.say); labelEl.textContent = "…"; await wait(step.dur * 1000); }
-      else if (step.breathe) { const p = PATTERNS[step.breathe]; for (let c = 0; c < step.cycles && !aborted; c++) await runCycle(p); }
+    await sayFor("f_begin", 7);       if (aborted) return;
+    await sayFor("f_mindful", 13);    if (aborted) return;
+    const list = patternList(minutes);
+    const middleEnd = total - CLOSE;
+    const slice = Math.max(20, (middleEnd - elapsed) / list.length);
+    const startMiddle = elapsed;
+    for (let i = 0; i < list.length && !aborted; i++) {
+      const p = PATTERNS[list[i]];
+      const target = Math.min(middleEnd, Math.round(startMiddle + slice * (i + 1)));
+      say(p.announce); labelEl.textContent = "…"; countEl.textContent = ""; await wait(5000);
+      while (!aborted && elapsed < target - 2) await runCycle(p);
+      if (elapsed >= middleEnd) break;
     }
-    if (aborted) return;
-    say("bell");
-    finish();
+    if (!aborted) { say("f_closing"); labelEl.textContent = "Let your breath settle…"; countEl.textContent = ""; breatheTo(0.9, 8); }
   })();
 }
 
