@@ -47,7 +47,7 @@ Deno.serve(async (req: Request) => {
     ].join("\n");
 
     const body = {
-      model: "gpt-4o-mini",
+      model: "gpt-4o",
       temperature: 0.2,
       messages: [
         { role: "system", content: system },

@@ -225,7 +225,8 @@ button { font-family: inherit; cursor: pointer; }
 .note textarea:focus, .note select:focus { border-color: var(--indigo); background: var(--field-strong); }
 /* per-field dictation mic */
 .field-wrap { position: relative; }
-.field-wrap textarea { padding-right: 42px; }
+.field-wrap textarea, .field-wrap input { padding-right: 42px; }
+.log-add .field-wrap { flex: 1; min-width: 0; }
 .field-mic {
   position: absolute; right: 8px; bottom: 8px; width: 30px; height: 30px; border-radius: 50%;
   border: 1px solid var(--line); background: var(--card); color: var(--muted);

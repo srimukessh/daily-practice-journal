@@ -333,12 +333,14 @@ function renderItem(item, entry) {
     add.innerHTML = `<input type="text" class="log-input" placeholder="${item.logPh || "Add one…"}" ` +
       `enterkeyhint="done" />` + `<button class="log-add-btn">Add</button>`;
     const input = add.querySelector(".log-input");
+    input.dataset.log = item.id;   // lets the mic queue offline dictation into this log
     const submit = () => { addLog(item.id, input.value); };
     add.querySelector(".log-add-btn").onclick = submit;
     input.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); submit(); } });
     wrap.appendChild(ul);
     wrap.appendChild(add);
     el.appendChild(wrap);
+    attachFieldMic(input);   // 🎤 dictate a 3/10 / pause
   }
 
   // text notes
@@ -901,6 +903,11 @@ async function processPendingRecordings() {
           e.notes[r.noteId] = cur ? cur + " " + text : text;
           e.updated_at = nowIso(); storeEntry(r.ds, e); markDirty(r.ds); schedulePush();
           toast(`Transcribed your note (${prettyDate(r.ds)})`);
+        } else if (r.logId) {
+          const e = loadEntry(r.ds);
+          (e.logs[r.logId] = e.logs[r.logId] || []).push({ t: nowIso(), text });
+          e.updated_at = nowIso(); storeEntry(r.ds, e); markDirty(r.ds); schedulePush();
+          toast(`Added to your log (${prettyDate(r.ds)})`);
         } else if (r.context) {
           const cur = (userContext || "").trim();
           await saveContext(cur ? cur + " " + text : text);
@@ -1036,6 +1043,7 @@ function attachFieldMic(ta) {
 
   // where a deferred (offline) transcript should land later
   const target = ta.dataset.note ? { noteId: ta.dataset.note, ds: currentDs }
+    : ta.dataset.log ? { logId: ta.dataset.log, ds: currentDs }
     : ta.id === "context" ? { context: true } : null;
 
   const insertText = (text) => {
@@ -1089,7 +1097,9 @@ function showReview(ds, result) {
     if (it.group) for (const g of it.group) if (result[g.id] === true) checks.push({ id: g.id, label: g.label });
     if (it.select && result[it.select.id]) fields.push({ kind: "select", id: it.select.id, label: it.select.label, value: result[it.select.id], options: it.select.options });
     if (it.notes) for (const n of it.notes) if (result[n.id] && String(result[n.id]).trim())
-      fields.push({ kind: "note", id: n.id, label: n.label, value: String(result[n.id]).trim() });
+      // heading matches the main screen: item name for single-note items (e.g. "Rejoice"),
+      // the note's own label for multi-note items (e.g. Regret / Remedy / Resolve)
+      fields.push({ kind: "note", id: n.id, label: it.notes.length > 1 ? n.label : it.label, value: String(result[n.id]).trim() });
     if (it.log && Array.isArray(result[it.id]) && result[it.id].length)
       fields.push({ kind: "log", id: it.id, label: it.label + " (one per line)", value: result[it.id].join("\n") });
     if (it.minutes && result[it.id + "_min"] != null && result[it.id + "_min"] !== "")
