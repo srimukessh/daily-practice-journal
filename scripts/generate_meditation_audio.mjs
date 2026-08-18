@@ -18,25 +18,25 @@ try {
 } catch (_) {}
 if (!key) { console.error("No ELEVENLABS_API_KEY"); process.exit(1); }
 
-// a calm, soft voice ("Sarah"); even delivery for meditation
-const VOICE = "EXAVITQu4vr4xnSDxMaL";
-const VOICE_SETTINGS = { stability: 0.6, similarity_boost: 0.75, style: 0.0, use_speaker_boost: true };
+// a calm, soft voice ("Charlotte"); high stability = even, unhurried delivery for meditation
+const VOICE = "XB0fDUnXU5powFXDhCwa";
+const VOICE_SETTINGS = { stability: 0.85, similarity_boost: 0.7, style: 0.0, use_speaker_boost: true };
 
 // Phase cues (short, spoken at each breath phase, synced to the circle), pattern
 // announcements (spoken once per pattern), and framing lines.
 const CUES = {
-  in: "Breathe in.",
-  hold: "Hold.",
-  out: "Breathe out.",
-  a_warmup: "Let's begin gently. Breathe in for four… and out for six.",
-  a_box: "Now, box breathing. In for four, hold for four, out for four, hold for four.",
-  a_478: "Now a calming breath. In for four… hold for seven… and a long, slow out for eight.",
-  a_coherent: "In for five… and out for five. Find a steady, even rhythm.",
-  a_balance: "In for four… hold for three… and out for five.",
-  f_begin: "Let's begin. Settle into a comfortable position, and gently let your eyes close.",
-  f_mindful: "For the next few minutes, be mindful of everything around you, and everything happening within you. Let the breath be your anchor.",
-  f_closing: "Beautiful. Let your breath return to its own natural rhythm.",
-  f_end: "Gently open your eyes when you're ready, and carry this calm with you.",
+  in: "Breathe in…",
+  hold: "And hold…",
+  out: "And gently… breathe out…",
+  a_warmup: "Let's begin, gently. Breathe in… for four. And a long breath out… for eight.",
+  a_box: "Now, box breathing. In for four… hold for four… out for four… and hold for four.",
+  a_478: "A calming breath now. In for four… hold for seven… and a long, slow breath out, for eight.",
+  a_coherent: "In for six… and out for six. Let it become a smooth, steady rhythm.",
+  a_balance: "In for four… hold for four… and out for six.",
+  f_begin: "Let's begin. Settle in… and when you're ready, gently let your eyes close.",
+  f_mindful: "For the next few minutes… be aware of everything around you… and everything within you. Let your breath be the anchor.",
+  f_closing: "Beautiful. Let your breath return… to its own, natural rhythm.",
+  f_end: "Gently open your eyes when you're ready… and carry this calm with you.",
 };
 
 const BG = {

@@ -1330,11 +1330,11 @@ function openRoutineView(item) {
 // ===== Guided concentration meditation (paced-breathing player) =====
 // Each pattern: seconds to inhale / hold / exhale / hold-after, + its spoken announcement.
 const PATTERNS = {
-  warmup:   { in: 4, hold: 0, out: 6, hold2: 0, announce: "a_warmup" },
+  warmup:   { in: 4, hold: 0, out: 8, hold2: 0, announce: "a_warmup" },
   box:      { in: 4, hold: 4, out: 4, hold2: 4, announce: "a_box" },
   calm478:  { in: 4, hold: 7, out: 8, hold2: 0, announce: "a_478" },
-  balance:  { in: 4, hold: 3, out: 5, hold2: 0, announce: "a_balance" },
-  coherent: { in: 5, hold: 0, out: 5, hold2: 0, announce: "a_coherent" },
+  balance:  { in: 4, hold: 4, out: 6, hold2: 0, announce: "a_balance" },
+  coherent: { in: 6, hold: 0, out: 6, hold2: 0, announce: "a_coherent" },
 };
 function patternList(minutes) {
   if (minutes <= 3) return ["warmup", "box", "coherent"];
@@ -1419,10 +1419,13 @@ function openMeditationPlayer(item, minutes, bg) {
     .forEach((n) => clips[n] = new Audio(`audio/voice/${n}.mp3`));
   const bgAudio = bg !== "silent" ? new Audio(`audio/bg/${bg}.mp3`) : null;
   if (bgAudio) { bgAudio.loop = true; bgAudio.volume = 0.3; }
-  const prime = (a) => { try { a.muted = true; a.play().then(() => { a.pause(); a.currentTime = 0; a.muted = false; }).catch(() => { a.muted = false; }); } catch (_) {} };
-  [bell, ...Object.values(clips)].forEach(prime);
+  const voiceEls = [bell, ...Object.values(clips)];
+  const prime = (a) => { try { a.muted = true; return a.play().then(() => { a.pause(); a.currentTime = 0; a.muted = false; }).catch(() => { a.muted = false; }); } catch (_) { return Promise.resolve(); } };
+  const primed = voiceEls.map(prime);        // unlock within the Start gesture
   if (bgAudio) bgAudio.play().catch(() => {});
-  const say = (name) => { const a = name === "bell" ? bell : clips[name]; if (a) { try { a.currentTime = 0; a.play().catch(() => {}); } catch (_) {} } };
+  const stopVoices = () => voiceEls.forEach((a) => { try { if (!a.paused) { a.pause(); a.currentTime = 0; } } catch (_) {} });
+  // only one voice at a time — never overlap
+  const say = (name) => { stopVoices(); const a = name === "bell" ? bell : clips[name]; if (a) { try { a.currentTime = 0; a.play().catch(() => {}); } catch (_) {} } };
   const sayFor = async (name, secs) => { say(name); labelEl.textContent = "…"; countEl.textContent = ""; await wait(secs * 1000); };
 
   let aborted = false, paused = false, elapsed = 0;
@@ -1456,7 +1459,7 @@ function openMeditationPlayer(item, minutes, bg) {
     await phase("Breathe in", "in", 1.15, p.in);
     await phase("Hold", "hold", 1.15, p.hold);
     await phase("Breathe out", "out", 0.7, p.out);
-    await phase("Hold", "hold", 0.7, p.hold2);
+    await phase("Rest", null, 0.7, p.hold2);   // trailing hold — silent
   }
 
   const cleanup = () => {
@@ -1490,22 +1493,23 @@ function openMeditationPlayer(item, minutes, bg) {
 
   // run the session — fills exactly to `total`; the clock (above) calls finish() at 0
   (async () => {
-    const CLOSE = 15;                 // seconds reserved at the end for the closing line
-    say("bell");
-    await sayFor("f_begin", 7);       if (aborted) return;
-    await sayFor("f_mindful", 13);    if (aborted) return;
+    await Promise.allSettled(primed); stopVoices(); // let priming finish so nothing overlaps
+    const CLOSE = 18;                 // seconds reserved at the end for the closing line
+    say("bell"); await wait(4500);    // let the bell ring out before speaking
+    await sayFor("f_begin", 8);       if (aborted) return;
+    await sayFor("f_mindful", 15);    if (aborted) return;
     const list = patternList(minutes);
     const middleEnd = total - CLOSE;
-    const slice = Math.max(20, (middleEnd - elapsed) / list.length);
     const startMiddle = elapsed;
+    const slice = Math.max(28, (middleEnd - startMiddle) / list.length);
     for (let i = 0; i < list.length && !aborted; i++) {
       const p = PATTERNS[list[i]];
       const target = Math.min(middleEnd, Math.round(startMiddle + slice * (i + 1)));
-      say(p.announce); labelEl.textContent = "…"; countEl.textContent = ""; await wait(5000);
+      await sayFor(p.announce, 9);    if (aborted) return;   // announce the pattern, unhurried
       while (!aborted && elapsed < target - 2) await runCycle(p);
       if (elapsed >= middleEnd) break;
     }
-    if (!aborted) { say("f_closing"); labelEl.textContent = "Let your breath settle…"; countEl.textContent = ""; breatheTo(0.9, 8); }
+    if (!aborted) { say("f_closing"); labelEl.textContent = "Let your breath settle…"; countEl.textContent = ""; breatheTo(0.9, 10); }
   })();
 }
 
