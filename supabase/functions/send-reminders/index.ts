@@ -67,8 +67,9 @@ Deno.serve(async (req: Request) => {
   const report: unknown[] = [];
   let sent = 0;
 
+  const ALCOHOL_START = 17 * 60; // 5pm local — first alcohol nudge
   const ALCOHOL_UNTIL = 23 * 60; // 11pm local — last alcohol nudge
-  const ALCOHOL_MSG = `Under ${SLEEP_MIN}h of sleep today — go easy on the alcohol tonight. 🌙`;
+  const ALCOHOL_MSG = `Yo — under ${SLEEP_MIN}h of sleep today. Go easy on the alcohol tonight. 🌙`;
 
   for (const row of subs ?? []) {
     const nowMin = localMinutes(row.tz);
@@ -83,11 +84,10 @@ Deno.serve(async (req: Request) => {
       if (inWindow(hmToMinutes(rem[key]))) due.push(key);
     }
 
-    // hourly alcohol repeat: on the hour after the evening reminder, up to 11pm local
-    const eMin = hmToMinutes(rem.evening);
+    // hourly alcohol nudge, every hour 5pm → 11pm local (independent of the evening reminder)
     let alcoholRepeat = force === "alcohol";
-    if (eMin != null && !force) {
-      for (let t = eMin + 60; t <= ALCOHOL_UNTIL; t += 60) { if (inWindow(t)) { alcoholRepeat = true; break; } }
+    if (!force) {
+      for (let t = ALCOHOL_START; t <= ALCOHOL_UNTIL; t += 60) { if (inWindow(t)) { alcoholRepeat = true; break; } }
     }
 
     if (!due.length && !alcoholRepeat) continue;

@@ -546,6 +546,12 @@ async function syncReminderTimes() {
   const sub = await currentPushSub();
   if (sub) await saveSubscription(sub, true);
 }
+// keep the stored timezone (and reminder times) current — self-corrects a stale tz
+async function refreshPush() {
+  if (!getReminders().on) return;
+  const sub = await currentPushSub();
+  if (sub) await saveSubscription(sub, true);
+}
 
 // ===== Standing user context (personalises analytical-meditation routines) =====
 async function loadContext() {
@@ -656,6 +662,7 @@ function onSignedIn(u) {
   processPending();
   processPendingRecordings();
   loadContext();
+  refreshPush();
 }
 
 // ===== Toast =====
