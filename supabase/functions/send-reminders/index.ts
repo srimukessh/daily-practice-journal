@@ -67,29 +67,54 @@ Deno.serve(async (req: Request) => {
   const report: unknown[] = [];
   let sent = 0;
 
+  const ALCOHOL_UNTIL = 23 * 60; // 11pm local — last alcohol nudge
+  const ALCOHOL_MSG = `Under ${SLEEP_MIN}h of sleep today — go easy on the alcohol tonight. 🌙`;
+
   for (const row of subs ?? []) {
     const nowMin = localMinutes(row.tz);
     const windowStart = nowMin - (nowMin % WINDOW_MIN);
+    const inWindow = (t: number | null) => t != null && t >= windowStart && t < windowStart + WINDOW_MIN;
     const rem = row.reminders || {};
+
+    // standard morning/evening/bed reminders due in this window
     const due: string[] = [];
     for (const key of ["morning", "evening", "bed"]) {
       if (force) { if (key === force) due.push(key); continue; }
-      const t = hmToMinutes(rem[key]);
-      if (t != null && t >= windowStart && t < windowStart + WINDOW_MIN) due.push(key);
+      if (inWindow(hmToMinutes(rem[key]))) due.push(key);
     }
-    if (!due.length) continue;
 
+    // hourly alcohol repeat: on the hour after the evening reminder, up to 11pm local
+    const eMin = hmToMinutes(rem.evening);
+    let alcoholRepeat = force === "alcohol";
+    if (eMin != null && !force) {
+      for (let t = eMin + 60; t <= ALCOHOL_UNTIL; t += 60) { if (inWindow(t)) { alcoholRepeat = true; break; } }
+    }
+
+    if (!due.length && !alcoholRepeat) continue;
+
+    // fetch today's sleep once if it matters
+    let sleep = NaN;
+    if (due.includes("evening") || alcoholRepeat) {
+      const { data: ent } = await supabase.from("entries")
+        .select("data").eq("user_id", row.user_id).eq("entry_date", localDate(row.tz)).maybeSingle();
+      sleep = parseFloat(ent?.data?.mins?.sleep);
+    }
+    const lowSleep = !isNaN(sleep) && sleep < SLEEP_MIN;
+
+    const toSend: { key: string; body: string }[] = [];
     for (const key of due) {
       let body = MESSAGES[key];
-      // Evening: if they logged under-7h sleep today, add the alcohol nudge.
-      if (key === "evening") {
-        const { data: ent } = await supabase.from("entries")
-          .select("data").eq("user_id", row.user_id).eq("entry_date", localDate(row.tz)).maybeSingle();
-        const sleep = parseFloat(ent?.data?.mins?.sleep);
-        if (!isNaN(sleep) && sleep < SLEEP_MIN) {
-          body = `Evening review — Regret, Remedy, Resolve, then Rejoice. You slept under ${SLEEP_MIN}h — go easy on the alcohol tonight. 🌙`;
-        }
+      if (key === "evening" && lowSleep) {
+        body = `Evening review — Regret, Remedy, Resolve, then Rejoice. You slept under ${SLEEP_MIN}h — go easy on the alcohol tonight. 🌙`;
       }
+      toSend.push({ key, body });
+    }
+    // add the hourly alcohol nudge (skip if the evening reminder is already firing this window)
+    if (alcoholRepeat && !due.includes("evening") && lowSleep) {
+      toSend.push({ key: "alcohol", body: ALCOHOL_MSG });
+    }
+
+    for (const { key, body } of toSend) {
       report.push({ endpoint: (row.endpoint || "").slice(-12), tz: row.tz, localMin: nowMin, fire: key });
       if (dry) continue;
       try {
