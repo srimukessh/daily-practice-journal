@@ -151,7 +151,8 @@ let pushTimer = null;
 let userContext = "";  // standing note (e.g. "going through a breakup") — feeds meditation routines
 
 // ===== Rendering: checklist =====
-const CHECK_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12l5 5L20 6"/></svg>';
+// checkmark centered in its 24×24 viewBox so it sits dead-centre in the box
+const CHECK_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg>';
 
 function renderChecklist() {
   const entry = loadEntry(currentDs);

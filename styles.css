@@ -167,12 +167,12 @@ button { font-family: inherit; cursor: pointer; }
 }
 .item-head { display: flex; gap: 12px; align-items: flex-start; }
 .check {
-  flex: 0 0 auto; width: 26px; height: 26px; border-radius: 8px;
+  flex: 0 0 auto; box-sizing: border-box; width: 26px; height: 26px; border-radius: 8px;
   border: 2px solid var(--line); background: #fff; display: grid; place-items: center;
   margin-top: 1px; transition: all .15s ease;
 }
 .check.on { background: var(--good); border-color: var(--good); }
-.check svg { width: 16px; height: 16px; opacity: 0; }
+.check svg { display: block; width: 15px; height: 15px; opacity: 0; }
 .check.on svg { opacity: 1; }
 .item-body { flex: 1; min-width: 0; }
 .item-labelrow { display: flex; align-items: center; gap: 7px; }
