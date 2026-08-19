@@ -308,9 +308,9 @@ button { font-family: inherit; cursor: pointer; }
   background: radial-gradient(circle at 50% 35%, var(--indigo), var(--indigo-dark));
   box-shadow: 0 0 70px rgba(124,140,255,.45); transform: scale(.7);
 }
-.breath-inner { grid-area: 1 / 1; z-index: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; }
-.breath-label { color: #fff; font-weight: 600; font-size: 1rem; text-shadow: 0 1px 8px rgba(0,0,0,.5); }
-.breath-count { color: #fff; font-weight: 800; font-size: 1.9rem; font-variant-numeric: tabular-nums; text-shadow: 0 1px 8px rgba(0,0,0,.5); min-height: 2rem; }
+.breath-inner { grid-area: 1 / 1; z-index: 1; display: grid; place-items: center; width: 200px; height: 200px; }
+.breath-label { grid-area: 1 / 1; color: #fff; font-weight: 600; font-size: 1rem; text-shadow: 0 1px 8px rgba(0,0,0,.5); text-align: center; }
+.breath-count { grid-area: 1 / 1; transform: translateY(36px); color: #fff; font-weight: 800; font-size: 1.7rem; font-variant-numeric: tabular-nums; text-shadow: 0 1px 8px rgba(0,0,0,.5); }
 .med-timer { font-size: 2.1rem; font-weight: 800; font-variant-numeric: tabular-nums; color: var(--ink); }
 .med-controls { display: flex; gap: 12px; width: 100%; }
 .med-controls .secondary-btn { flex: 1; margin-bottom: 0; }
