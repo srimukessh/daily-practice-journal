@@ -355,6 +355,11 @@ button { font-family: inherit; cursor: pointer; }
 .range-chips { display: flex; gap: 8px; margin: 10px 0; }
 .range-chip { flex: 1; border: 1px solid var(--line); background: var(--card); color: var(--muted); border-radius: 10px; padding: 10px; font-weight: 600; font-size: .85rem; }
 .range-chip.on { background: var(--indigo); color: #fff; border-color: var(--indigo); }
+#summarise-btn {
+  width: 100%; margin-top: 6px; border: 0;
+  background: linear-gradient(135deg, #10b981, #0d9488); color: #fff;
+  box-shadow: 0 6px 18px rgba(16,185,129,.30);
+}
 .sum-overview { color: var(--ink); }
 .sum-sec { margin: 14px 0; }
 .sum-h { font-size: .74rem; text-transform: uppercase; letter-spacing: .05em; color: var(--indigo); font-weight: 700; margin-bottom: 6px; }
