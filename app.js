@@ -1380,18 +1380,26 @@ function buildSession(minutes) {
   return { steps, total };
 }
 
+// ready-made guided tracks (single-file playback — robust to screen-lock on iOS)
+const GUIDED_TRACKS = [
+  { id: "julie12", title: "Dr Julie Smith — Mindfulness", label: "🎧 Dr Julie Smith · 13 min", file: "audio/guided/julie-12.mp3" },
+  { id: "mindful10", title: "Mindfulness Meditation", label: "🎧 Mindfulness · 10 min", file: "audio/guided/mindful-10.mp3" },
+];
+
 function openMeditationSetup(item) {
   let mins = 5, bg = "rain";
+  const tracks = GUIDED_TRACKS.map((t) => `<button class="routine-btn track" data-track="${t.id}">${t.label}</button>`).join("");
   const ov = buildOverlay(`
     <div class="sheet-head"><h2>Concentration meditation</h2><button class="sheet-x" aria-label="close">×</button></div>
-    <label class="rev-h">Length</label>
+    <label class="rev-h">Guided sessions</label>
+    <div class="track-list">${tracks}</div>
+    <label class="rev-h" style="margin-top:18px;display:block">Or a paced-breathing session</label>
     <div class="range-chips" id="med-durs">
       <button class="range-chip" data-m="3">3 min</button>
       <button class="range-chip on" data-m="5">5 min</button>
       <button class="range-chip" data-m="10">10 min</button>
     </div>
-    <label class="rev-h" style="margin-top:14px;display:block">Background</label>
-    <div class="range-chips wrap" id="med-bgs">
+    <div class="range-chips wrap" id="med-bgs" style="margin-top:8px">
       <button class="range-chip on" data-bg="rain">🌧 Rain</button>
       <button class="range-chip" data-bg="ocean">🌊 Ocean</button>
       <button class="range-chip" data-bg="spiritual">🕉 Spiritual</button>
@@ -1399,16 +1407,66 @@ function openMeditationSetup(item) {
     </div>
     <div class="sheet-actions">
       <button class="secondary-btn" id="med-cancel">Cancel</button>
-      <button class="primary-btn" id="med-start">Begin</button>
+      <button class="primary-btn" id="med-start">Begin breathing</button>
     </div>`);
   const pick = (sel, set) => ov.querySelectorAll(sel).forEach((c) => c.onclick = () => {
     ov.querySelectorAll(sel).forEach((x) => x.classList.remove("on")); c.classList.add("on"); set(c);
   });
   pick("#med-durs .range-chip", (c) => mins = +c.dataset.m);
   pick("#med-bgs .range-chip", (c) => bg = c.dataset.bg);
+  ov.querySelectorAll(".track").forEach((b) => b.onclick = () => {
+    const t = GUIDED_TRACKS.find((x) => x.id === b.dataset.track);
+    ov.remove(); openTrackPlayer(item, t);
+  });
   ov.querySelector(".sheet-x").onclick = () => ov.remove();
   ov.querySelector("#med-cancel").onclick = () => ov.remove();
   ov.querySelector("#med-start").onclick = () => { ov.remove(); openMeditationPlayer(item, mins, bg); };
+}
+
+// Simple, robust player for a ready-made track: one <audio>, plays through even on lock.
+function openTrackPlayer(item, track) {
+  const ov = buildOverlay(`
+    <div class="med-player">
+      <button class="sheet-x med-x" aria-label="close">×</button>
+      <div class="breath-wrap"><div class="breath-circle ambient" id="breath-circle"></div>
+        <div class="breath-inner"><div class="breath-label" id="breath-label"></div></div></div>
+      <div class="med-timer" id="med-timer">0:00</div>
+      <div class="med-controls">
+        <button class="secondary-btn" id="tp-pause">Pause</button>
+        <button class="secondary-btn" id="tp-end">End</button>
+      </div>
+    </div>`);
+  ov.querySelector(".sheet").classList.add("med-sheet");
+  ov.querySelector("#breath-label").textContent = track.title;
+  const timerEl = ov.querySelector("#med-timer");
+  const circle = ov.querySelector("#breath-circle");
+  const audio = new Audio(track.file);
+  audio.play().catch(() => {});
+  audio.ontimeupdate = () => {
+    const dur = audio.duration || 0;
+    timerEl.textContent = mmss(Math.max(0, Math.round(dur - audio.currentTime)));
+  };
+  let done = false;
+  const finish = () => {
+    if (done) return; done = true;
+    audio.pause();
+    const e = loadEntry(currentDs);
+    e.checks[item.id] = true;
+    const m = Math.round((audio.duration || 0) / 60);
+    if (m && !e.mins[item.id]) e.mins[item.id] = String(m);
+    e.updated_at = nowIso(); storeEntry(currentDs, e); markDirty(currentDs); schedulePush();
+    ov.querySelector("#breath-label").textContent = "Done 🙏"; timerEl.textContent = "";
+    toast("Meditation complete ✓");
+    setTimeout(() => { ov.remove(); renderChecklist(); }, 2200);
+  };
+  audio.onended = finish;
+  const close = () => { audio.pause(); ov.remove(); renderChecklist(); };
+  ov.querySelector("#tp-pause").onclick = (ev) => {
+    if (audio.paused) { audio.play().catch(() => {}); ev.target.textContent = "Pause"; circle.style.animationPlayState = "running"; }
+    else { audio.pause(); ev.target.textContent = "Resume"; circle.style.animationPlayState = "paused"; }
+  };
+  ov.querySelector("#tp-end").onclick = close;
+  ov.querySelector(".med-x").onclick = close;
 }
 
 function openMeditationPlayer(item, minutes, bg) {
@@ -1435,12 +1493,24 @@ function openMeditationPlayer(item, minutes, bg) {
   const clips = {};
   ["in", "hold", "out", "a_warmup", "a_box", "a_478", "a_balance", "a_coherent", "f_begin", "f_mindful", "f_closing", "f_end"]
     .forEach((n) => clips[n] = new Audio(`audio/voice/${n}.mp3`));
-  const bgAudio = bg !== "silent" ? new Audio(`audio/bg/${bg}.mp3`) : null;
-  if (bgAudio) { bgAudio.loop = true; bgAudio.volume = 0.3; }
+  // Background loop via Web Audio (decoded PCM loops seamlessly — no MP3 gap like <audio loop>)
+  let audioCtx = null, bgSrc = null;
+  const bgAudio = { pause() { try { audioCtx && audioCtx.suspend(); } catch (_) {} }, play() { try { audioCtx && audioCtx.resume(); } catch (_) {} return Promise.resolve(); } };
+  if (bg !== "silent") {
+    try {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      audioCtx.resume();
+      fetch(`audio/bg/${bg}.mp3`).then((r) => r.arrayBuffer()).then((a) => audioCtx.decodeAudioData(a)).then((buf) => {
+        bgSrc = audioCtx.createBufferSource(); bgSrc.buffer = buf; bgSrc.loop = true;
+        const g = audioCtx.createGain(); g.gain.value = 0.3;
+        bgSrc.connect(g).connect(audioCtx.destination); bgSrc.start();
+      }).catch(() => {});
+    } catch (_) {}
+  }
+  const stopBg = () => { try { bgSrc && bgSrc.stop(); } catch (_) {} try { audioCtx && audioCtx.close(); } catch (_) {} bgSrc = null; audioCtx = null; };
   const voiceEls = [bell, ...Object.values(clips)];
   const prime = (a) => { try { a.muted = true; return a.play().then(() => { a.pause(); a.currentTime = 0; a.muted = false; }).catch(() => { a.muted = false; }); } catch (_) { return Promise.resolve(); } };
   const primed = voiceEls.map(prime);        // unlock within the Start gesture
-  if (bgAudio) bgAudio.play().catch(() => {});
   const stopVoices = () => voiceEls.forEach((a) => { try { if (!a.paused) { a.pause(); a.currentTime = 0; } } catch (_) {} });
   // only one voice at a time — never overlap
   const say = (name) => { stopVoices(); const a = name === "bell" ? bell : clips[name]; if (a) { try { a.currentTime = 0; a.play().catch(() => {}); } catch (_) {} } };
@@ -1482,13 +1552,13 @@ function openMeditationPlayer(item, minutes, bg) {
 
   const cleanup = () => {
     aborted = true; clearInterval(timer);
-    if (bgAudio) bgAudio.pause();
+    stopBg();
     [bell, ...Object.values(clips)].forEach((a) => { try { a.pause(); } catch (_) {} });
   };
   const finish = () => {
     if (aborted) return;
     aborted = true; clearInterval(timer);
-    if (bgAudio) bgAudio.pause();
+    stopBg();
     say("bell");
     const e = loadEntry(currentDs);
     e.checks[item.id] = true;

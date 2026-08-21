@@ -314,6 +314,10 @@ button { font-family: inherit; cursor: pointer; }
 .med-timer { font-size: 2.1rem; font-weight: 800; font-variant-numeric: tabular-nums; color: var(--ink); }
 .med-controls { display: flex; gap: 12px; width: 100%; }
 .med-controls .secondary-btn { flex: 1; margin-bottom: 0; }
+.track-list { display: flex; flex-direction: column; gap: 8px; }
+.routine-btn.track { text-align: left; }
+.breath-circle.ambient { animation: breathe 11s ease-in-out infinite; }
+@keyframes breathe { 0%, 100% { transform: scale(.78); } 50% { transform: scale(1.08); } }
 
 .reminder-line {
   text-align: center; font-style: italic; color: var(--muted);
