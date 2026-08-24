@@ -176,7 +176,6 @@ function renderChecklist() {
     root.appendChild(sec);
   }
   // size editable log entries to their content (they're in the DOM now)
-  root.querySelectorAll(".log-text, .triple-input").forEach(autoGrow);
   renderProgress(entry);
 }
 
@@ -335,7 +334,7 @@ function renderItem(item, entry) {
         fw.innerHTML = `<label>${fld.label}</label><textarea rows="1" class="triple-input"></textarea>`;
         const ta = fw.querySelector("textarea");
         ta.value = tr[fld.id] || "";
-        ta.addEventListener("input", (e) => { editTriple(item.id, idx, fld.id, e.target.value); autoGrow(e.target); });
+        ta.addEventListener("input", (e) => { editTriple(item.id, idx, fld.id, e.target.value); });
         row.appendChild(fw);
       }
       const del = document.createElement("button");
@@ -380,7 +379,7 @@ function renderItem(item, entry) {
         `<button class="log-del" aria-label="delete">×</button>`;
       const lt = row.querySelector(".log-text");
       lt.value = entryLog.text;
-      lt.addEventListener("input", (e) => { editLog(item.id, idx, e.target.value); autoGrow(e.target); });
+      lt.addEventListener("input", (e) => { editLog(item.id, idx, e.target.value); });
       row.querySelector(".log-del").onclick = () => removeLog(item.id, idx);
       ul.appendChild(row);
     });
@@ -1137,7 +1136,7 @@ function attachFieldMic(ta) {
     const ins = (cur && !/\s$/.test(cur.slice(0, pos)) ? " " : "") + text;
     ta.value = cur.slice(0, pos) + ins + cur.slice(pos);
     ta.dispatchEvent(new Event("input", { bubbles: true }));
-    if (ta.classList.contains("log-text")) autoGrow(ta);
+    
   };
 
   let rec = null, chunks = [], mime = "";
