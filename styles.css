@@ -319,6 +319,20 @@ button { font-family: inherit; cursor: pointer; }
 .breath-circle.ambient { animation: breathe 11s ease-in-out infinite; }
 @keyframes breathe { 0%, 100% { transform: scale(.78); } 50% { transform: scale(1.08); } }
 
+/* evening-review triples (regret → remedy → resolve) */
+.triple { margin-top: 12px; }
+.triple-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 10px; }
+.triple-row { border: 1px solid var(--line); border-radius: 12px; padding: 11px; background: var(--field); display: flex; flex-direction: column; gap: 9px; }
+.triple-field label { display: block; font-size: .72rem; text-transform: uppercase; letter-spacing: .04em; color: var(--indigo); font-weight: 700; margin-bottom: 4px; }
+.triple-input, .triple-add textarea {
+  width: 100%; border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px;
+  font: inherit; font-size: .92rem; background: var(--card); color: var(--ink); outline: none; resize: none; overflow: hidden;
+}
+.triple-input:focus, .triple-add textarea:focus { border-color: var(--indigo); background: var(--field-strong); }
+.triple-del { align-self: flex-end; background: none; border: 0; color: var(--muted); font-size: .8rem; padding: 2px 4px; }
+.triple-add { border: 1px dashed var(--line); border-radius: 12px; padding: 11px; display: flex; flex-direction: column; gap: 9px; }
+.triple-add .log-add-btn { align-self: flex-start; padding: 8px 20px; }
+
 .reminder-line {
   text-align: center; font-style: italic; color: var(--muted);
   margin: 22px 8px; font-size: .92rem;

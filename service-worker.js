@@ -1,5 +1,5 @@
 /* Offline app-shell cache. Bump CACHE when you change static files to force an update. */
-const CACHE = "daily-practice-v32";
+const CACHE = "daily-practice-v33";
 const MED_AUDIO = [
   "in", "hold", "out", "a_warmup", "a_box", "a_478", "a_balance", "a_coherent",
   "f_begin", "f_mindful", "f_closing", "f_end",

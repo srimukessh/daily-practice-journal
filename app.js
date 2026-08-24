@@ -33,10 +33,10 @@ const SECTIONS = [
   {
     title: "Evening review",
     items: [
-      { id: "review", label: "Evening review",
-        hint: "Work through what was hard today — the first three Opponent Powers.",
-        notes: [
-          { id: "regret", label: "Regret", ph: "What was unhelpful today — what did I do, feel, want?" },
+      { id: "review", label: "Evening review", triple: true,
+        hint: "For each thing that was hard: regret it, reflect on a remedy, resolve to respond differently. Add as many as you like.",
+        fields: [
+          { id: "regret", label: "Regret", ph: "What was unhelpful — what did I do, feel, want?" },
           { id: "remedy", label: "Remedy / reflection", ph: "The antidote — e.g. it's not about me; what actually helps." },
           { id: "resolve", label: "Resolve", ph: "How will I respond differently next time?" },
         ] },
@@ -90,10 +90,15 @@ function loadEntry(ds) {
       if (!e.mins) e.mins = {};   // back-compat for entries saved before minutes existed
       if (!("routine" in e)) e.routine = null;
       if (!("dump" in e)) e.dump = "";   // raw "speak/paste your day" text, kept for summaries
+      if (!e.triples) e.triples = {};    // evening-review entries: [{regret, remedy, resolve, t}]
+      // back-compat: surface an old single regret/remedy/resolve as one triple (data untouched)
+      if (!e.triples.review && (e.notes.regret || e.notes.remedy || e.notes.resolve)) {
+        e.triples.review = [{ regret: e.notes.regret || "", remedy: e.notes.remedy || "", resolve: e.notes.resolve || "", t: e.updated_at || null }];
+      }
       return e;
     } catch (_) {}
   }
-  return { checks: {}, notes: {}, logs: {}, mins: {}, routine: null, dump: "", updated_at: null };
+  return { checks: {}, notes: {}, logs: {}, mins: {}, routine: null, dump: "", triples: {}, updated_at: null };
 }
 function storeEntry(ds, entry) { localStorage.setItem(LKEY(ds), JSON.stringify(entry)); }
 function allLocalDates() {
@@ -112,6 +117,7 @@ function clearDirty(ds) {
 
 // ===== Completion / streak math =====
 function itemDone(item, entry) {
+  if (item.triple) return (entry.triples[item.id] || []).length > 0;
   if (item.log) return (entry.logs[item.id] || []).length > 0;
   if (item.group) return item.group.every((g) => entry.checks[g.id]);
   return !!entry.checks[item.id];
@@ -124,11 +130,13 @@ function computeStreaks() {
   const scored = {};
   for (const ds of allLocalDates()) scored[ds] = dayScore(loadEntry(ds));
   const totalDays = Object.values(scored).filter((s) => s > 0).length;
-  // current streak: walk back from today
-  let current = 0;
-  for (let i = 0; ; i++) {
+  // current streak: consecutive practised days ending today or yesterday.
+  // Today being incomplete doesn't break it (you might not be done yet) — count up to yesterday.
+  let current = 0, currentStart = null;
+  let i = (scored[todayYmd()] || 0) >= PRACTISED ? 0 : 1;
+  for (; ; i++) {
     const ds = ymd(new Date(Date.now() - i * 864e5));
-    if ((scored[ds] || 0) >= PRACTISED) current++;
+    if ((scored[ds] || 0) >= PRACTISED) { current++; currentStart = ds; }
     else break;
   }
   // best streak across all recorded days
@@ -139,7 +147,7 @@ function computeStreaks() {
     else run = 1;
     best = Math.max(best, run); prev = ds;
   }
-  return { current, best, totalDays };
+  return { current, best, totalDays, currentStart };
 }
 
 // ===== App state =====
@@ -168,7 +176,7 @@ function renderChecklist() {
     root.appendChild(sec);
   }
   // size editable log entries to their content (they're in the DOM now)
-  root.querySelectorAll(".log-text").forEach(autoGrow);
+  root.querySelectorAll(".log-text, .triple-input").forEach(autoGrow);
   renderProgress(entry);
 }
 
@@ -180,7 +188,7 @@ function renderItem(item, entry) {
   const head = document.createElement("div");
   head.className = "item-head";
 
-  if (!item.group && !item.log) {
+  if (!item.group && !item.log && !item.triple) {
     const box = document.createElement("button");
     box.className = "check" + (entry.checks[item.id] ? " on" : "");
     box.innerHTML = CHECK_SVG;
@@ -311,6 +319,53 @@ function renderItem(item, entry) {
     el.appendChild(chips);
   }
 
+  // triples (evening review): a list of {regret, remedy, resolve}, add as many as you like
+  if (item.triple) {
+    const list = entry.triples[item.id] || [];
+    const wrap = document.createElement("div");
+    wrap.className = "triple";
+    const ul = document.createElement("div");
+    ul.className = "triple-list";
+    list.forEach((tr, idx) => {
+      const row = document.createElement("div");
+      row.className = "triple-row";
+      for (const fld of item.fields) {
+        const fw = document.createElement("div");
+        fw.className = "triple-field";
+        fw.innerHTML = `<label>${fld.label}</label><textarea rows="1" class="triple-input"></textarea>`;
+        const ta = fw.querySelector("textarea");
+        ta.value = tr[fld.id] || "";
+        ta.addEventListener("input", (e) => { editTriple(item.id, idx, fld.id, e.target.value); autoGrow(e.target); });
+        row.appendChild(fw);
+      }
+      const del = document.createElement("button");
+      del.className = "triple-del"; del.textContent = "× remove";
+      del.onclick = () => removeTriple(item.id, idx);
+      row.appendChild(del);
+      ul.appendChild(row);
+    });
+    wrap.appendChild(ul);
+    // add form
+    const add = document.createElement("div");
+    add.className = "triple-add";
+    for (const fld of item.fields) {
+      const fw = document.createElement("div");
+      fw.className = "triple-field";
+      fw.innerHTML = `<label>${fld.label}</label><textarea rows="1" data-fid="${fld.id}" placeholder="${fld.ph || ""}"></textarea>`;
+      add.appendChild(fw);
+    }
+    const addBtn = document.createElement("button");
+    addBtn.className = "log-add-btn"; addBtn.textContent = "Add";
+    addBtn.onclick = () => {
+      const obj = {};
+      add.querySelectorAll("textarea").forEach((t) => obj[t.dataset.fid] = t.value.trim());
+      if (Object.values(obj).some(Boolean)) addTriple(item.id, obj);
+    };
+    add.appendChild(addBtn);
+    wrap.appendChild(add);
+    el.appendChild(wrap);
+  }
+
   // running log (e.g. 3/10s caught through the day)
   if (item.log) {
     const list = entry.logs[item.id] || [];
@@ -411,6 +466,18 @@ function editLog(id, idx, text) {
   mutate((e) => { if (e.logs[id] && e.logs[id][idx]) e.logs[id][idx].text = text; });
 }
 function autoGrow(el) { el.style.height = "auto"; el.style.height = el.scrollHeight + "px"; }
+// evening-review triples (regret → remedy → resolve), add/edit/remove
+function addTriple(id, obj) {
+  mutate((e) => { (e.triples[id] = e.triples[id] || []).push({ ...obj, t: nowIso() }); });
+  renderChecklist();
+}
+function editTriple(id, idx, field, val) {
+  mutate((e) => { if (e.triples[id] && e.triples[id][idx]) e.triples[id][idx][field] = val; });
+}
+function removeTriple(id, idx) {
+  mutate((e) => { if (e.triples[id]) e.triples[id].splice(idx, 1); });
+  renderChecklist();
+}
 // keep the raw "speak/paste your day" text on the entry (used by summaries)
 function appendDump(ds, text) {
   const t = (text || "").trim();
@@ -444,10 +511,12 @@ function setDate(ds) {
 
 // ===== Calendar =====
 function renderCalendar() {
-  const { current, best, totalDays } = computeStreaks();
+  const { current, best, currentStart } = computeStreaks();
   $("#streak-current").textContent = current;
   $("#streak-best").textContent = best;
-  $("#streak-total").textContent = totalDays;
+  $("#streak-since").textContent = currentStart
+    ? new Date(currentStart + "T00:00:00").toLocaleDateString(undefined, { day: "numeric", month: "short" })
+    : "—";
 
   const y = calCursor.getFullYear(), m = calCursor.getMonth();
   $("#cal-title").textContent = calCursor.toLocaleDateString(undefined, { month: "long", year: "numeric" });
@@ -588,7 +657,7 @@ async function pushDirty() {
       const e = loadEntry(ds);
       const { error } = await sb.from("entries").upsert({
         user_id: user.id, entry_date: ds,
-        data: { checks: e.checks, notes: e.notes, logs: e.logs || {}, mins: e.mins || {}, routine: e.routine || null, dump: e.dump || "" },
+        data: { checks: e.checks, notes: e.notes, logs: e.logs || {}, mins: e.mins || {}, routine: e.routine || null, dump: e.dump || "", triples: e.triples || {} },
         updated_at: e.updated_at || nowIso(),
       }, { onConflict: "user_id,entry_date" });
       if (error) throw error;
@@ -613,7 +682,7 @@ async function pullAll() {
       const remoteTime = row.updated_at ? Date.parse(row.updated_at) : 0;
       const localTime = local.updated_at ? Date.parse(local.updated_at) : 0;
       if (remoteTime >= localTime) {
-        storeEntry(ds, { checks: row.data.checks || {}, notes: row.data.notes || {}, logs: row.data.logs || {}, mins: row.data.mins || {}, routine: row.data.routine || null, dump: row.data.dump || "", updated_at: row.updated_at });
+        storeEntry(ds, { checks: row.data.checks || {}, notes: row.data.notes || {}, logs: row.data.logs || {}, mins: row.data.mins || {}, routine: row.data.routine || null, dump: row.data.dump || "", triples: row.data.triples || {}, updated_at: row.updated_at });
       }
     }
     setSyncState("synced");
@@ -705,7 +774,7 @@ const SPEAKING_SCRIPT = [
 function buildAiSpec() {
   const props = {}, guide = [];
   for (const it of ALL_ITEMS) {
-    if (!it.group && !it.log) {
+    if (!it.group && !it.log && !it.triple) {
       props[it.id] = { type: ["boolean", "null"] };
       guide.push(`${it.id} (boolean): did they do “${it.label}”? null if not mentioned.`);
     }
@@ -725,6 +794,10 @@ function buildAiSpec() {
     if (it.notes) for (const n of it.notes) {
       props[n.id] = { type: ["string", "null"] };
       guide.push(`${n.id} (string or null): ${n.label}. Their own words, first-person, including any body sensations and what they were wanting. null if not mentioned.`);
+    }
+    if (it.triple) for (const f of it.fields) {
+      props[f.id] = { type: ["string", "null"] };
+      guide.push(`${f.id} (string or null): ${f.label} — from the evening reflection. null if not mentioned.`);
     }
     if (it.log) {
       props[it.id] = { type: ["array", "null"], items: { type: "string" } };
@@ -751,7 +824,7 @@ function buildAiSpec() {
 function mergeResult(ds, result) {
   const e = loadEntry(ds);
   for (const it of ALL_ITEMS) {
-    if (!it.group && !it.log && result[it.id] === true) e.checks[it.id] = true;
+    if (!it.group && !it.log && !it.triple && result[it.id] === true) e.checks[it.id] = true;
     if (it.group) for (const g of it.group) if (result[g.id] === true) e.checks[g.id] = true;
     if (it.select && result[it.select.id]) e.notes[it.select.id] = result[it.select.id];
     if (it.multiselect && Array.isArray(result[it.multiselect.id]) && result[it.multiselect.id].length) {
@@ -765,6 +838,11 @@ function mergeResult(ds, result) {
         const cur = (e.notes[n.id] || "").trim();
         e.notes[n.id] = cur ? cur + "\n" + String(v).trim() : String(v).trim();
       }
+    }
+    if (it.triple) {
+      const tr = {}; let any = false;
+      for (const f of it.fields) { const v = result[f.id]; if (v && String(v).trim()) { tr[f.id] = String(v).trim(); any = true; } else tr[f.id] = ""; }
+      if (any) (e.triples[it.id] = e.triples[it.id] || []).push({ ...tr, t: nowIso() });
     }
     if (it.log && Array.isArray(result[it.id])) {
       for (const s of result[it.id]) if (s && s.trim()) (e.logs[it.id] = e.logs[it.id] || []).push({ t: nowIso(), text: s.trim() });
@@ -1101,13 +1179,15 @@ function showReview(ds, result) {
   // collect ticked checks (toggleable) and editable text fields
   const checks = [], fields = [];
   for (const it of ALL_ITEMS) {
-    if (!it.group && !it.log && result[it.id] === true) checks.push({ id: it.id, label: it.label });
+    if (!it.group && !it.log && !it.triple && result[it.id] === true) checks.push({ id: it.id, label: it.label });
     if (it.group) for (const g of it.group) if (result[g.id] === true) checks.push({ id: g.id, label: g.label });
     if (it.select && result[it.select.id]) fields.push({ kind: "select", id: it.select.id, label: it.select.label, value: result[it.select.id], options: it.select.options });
     if (it.notes) for (const n of it.notes) if (result[n.id] && String(result[n.id]).trim())
       // heading matches the main screen: item name for single-note items (e.g. "Rejoice"),
       // the note's own label for multi-note items (e.g. Regret / Remedy / Resolve)
       fields.push({ kind: "note", id: n.id, label: it.notes.length > 1 ? n.label : it.label, value: String(result[n.id]).trim() });
+    if (it.triple) for (const f of it.fields) if (result[f.id] && String(result[f.id]).trim())
+      fields.push({ kind: "note", id: f.id, label: f.label, value: String(result[f.id]).trim() });
     if (it.log && Array.isArray(result[it.id]) && result[it.id].length)
       fields.push({ kind: "log", id: it.id, label: it.label + " (one per line)", value: result[it.id].join("\n") });
     if (it.minutes && result[it.id + "_min"] != null && result[it.id + "_min"] !== "")
@@ -1185,6 +1265,10 @@ function buildDigest(days) {
       if (it.multiselect && (e.notes[it.multiselect.id] || []).length) parts.push(`${it.multiselect.label}: ${e.notes[it.multiselect.id].join(", ")}`);
       if (it.log && (e.logs[it.id] || []).length) parts.push(`${it.label}: ${e.logs[it.id].map((x) => x.text).join(" | ")}`);
       if (it.notes) for (const n of it.notes) { const v = (e.notes[n.id] || "").trim(); if (v) parts.push(`${n.label}: ${v}`); }
+      if (it.triple) for (const tr of (e.triples[it.id] || [])) {
+        const bits = it.fields.map((f) => (tr[f.id] || "").trim() ? `${f.label}: ${tr[f.id].trim()}` : "").filter(Boolean);
+        if (bits.length) parts.push(bits.join(" → "));
+      }
     }
     if (e.dump && e.dump.trim()) parts.push(`Journal: ${e.dump.trim()}`);
     if (parts.length) lines.push(`${ds}: ${parts.join("; ")}`);
