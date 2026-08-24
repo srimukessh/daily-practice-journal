@@ -1480,6 +1480,7 @@ function openMeditationSetup(item) {
     <div class="range-chips" id="med-durs">
       <button class="range-chip" data-m="3">3 min</button>
       <button class="range-chip on" data-m="5">5 min</button>
+      <button class="range-chip" data-m="7.5">7.5 min</button>
       <button class="range-chip" data-m="10">10 min</button>
     </div>
     <div class="range-chips wrap" id="med-bgs" style="margin-top:8px">
@@ -1630,7 +1631,7 @@ function openMeditationPlayer(item, minutes, bg) {
     await phase("Breathe in", "in", 1.15, p.in);
     await phase("Hold", "hold", 1.15, p.hold);
     await phase("Breathe out", "out", 0.7, p.out);
-    await phase("Rest", null, 0.7, p.hold2);   // trailing hold — silent
+    await phase("Hold", "hold", 0.7, p.hold2);   // hold after exhale (box breathing) — now cued
   }
 
   const cleanup = () => {

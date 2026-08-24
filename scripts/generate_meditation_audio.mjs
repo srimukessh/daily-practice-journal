@@ -18,9 +18,9 @@ try {
 } catch (_) {}
 if (!key) { console.error("No ELEVENLABS_API_KEY"); process.exit(1); }
 
-// a calm, soft voice ("Charlotte"); high stability = even, unhurried delivery for meditation
+// a calm, soft voice ("Charlotte"); high stability + slight slowdown = unhurried, peaceful
 const VOICE = "XB0fDUnXU5powFXDhCwa";
-const VOICE_SETTINGS = { stability: 0.85, similarity_boost: 0.7, style: 0.0, use_speaker_boost: true };
+const VOICE_SETTINGS = { stability: 0.9, similarity_boost: 0.7, style: 0.0, use_speaker_boost: true, speed: 0.9 };
 
 // Phase cues (short, spoken at each breath phase, synced to the circle), pattern
 // announcements (spoken once per pattern), and framing lines.
