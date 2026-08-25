@@ -17,7 +17,7 @@ const SECTIONS = [
       { id: "analytical", label: "Analytical meditation", minutes: true, routine: true,
         hint: "Bring up a mild example, notice it in the body, understand what you're wanting, and practise tolerating the feeling without needing to act. Tap “Guide me” for a step-by-step routine.",
         select: { id: "analytical_theme", label: "Theme for today",
-          options: ["", "Anger", "Being misunderstood", "Unfairness", "Rejection", "Attachment", "Accepting “no”"] },
+          options: ["", "Anger", "Being misunderstood", "Unfairness", "Rejection", "Attachment", "Accepting “no”", "Uncertainty"] },
         notes: [{ id: "analytical_note", label: "What came up (optional)", ph: "What did I notice in the body? What was I wanting?" }] },
     ],
   },
