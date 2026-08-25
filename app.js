@@ -434,6 +434,7 @@ function renderProgress(entry) {
 
 // ===== Mutations =====
 function mutate(fn) {
+  lastActiveTs = Date.now();
   const entry = loadEntry(currentDs);
   fn(entry);
   entry.updated_at = nowIso();
@@ -511,8 +512,10 @@ function switchView(view) {
 function openSettings() { renderSettings(); $("#view-settings").classList.remove("hidden"); }
 function closeSettings() { $("#view-settings").classList.add("hidden"); }
 
+let lastActiveTs = Date.now();
 function setDate(ds) {
   currentDs = ds;
+  lastActiveTs = Date.now();
   $("#date-label").textContent = prettyDate(ds);
   renderChecklist();
   switchView("checklist");
@@ -727,21 +730,22 @@ function showAuth() {
   $("#app").classList.add("hidden");
   $("#auth").classList.remove("hidden");
 }
+let bootedSession = false;
 function onSignedIn(u) {
   user = u;
   $("#auth").classList.add("hidden");
   $("#app").classList.remove("hidden");
-  // clean the magic-link tokens out of the URL
   if (location.hash.includes("access_token") || location.search.includes("code=")) {
     history.replaceState(null, "", location.pathname);
   }
-  setDate(todayYmd());
+  if (!bootedSession) {
+    // first sign-in this session: land on today + do the initial sync
+    bootedSession = true;
+    setDate(todayYmd());
+    pushDirty(); processPending(); processPendingRecordings(); loadContext(); refreshPush();
+  }
+  // repeat auth events (token refresh, refocus) must NOT reset the day you're viewing
   pullAll();
-  pushDirty();
-  processPending();
-  processPendingRecordings();
-  loadContext();
-  refreshPush();
 }
 
 // ===== Toast =====
@@ -1766,7 +1770,10 @@ function bindEvents() {
   window.addEventListener("online", () => { setSyncState("syncing…"); pushDirty().then(pullAll).then(processPending).then(processPendingRecordings); });
   window.addEventListener("offline", () => setSyncState("offline — saved on device"));
   document.addEventListener("visibilitychange", () => {
-    if (!document.hidden && user) pullAll();
+    if (document.hidden || !user) return;
+    // after 30 min away, jump back to today; otherwise keep the day you were on
+    if (Date.now() - lastActiveTs > 30 * 60 * 1000 && currentDs !== todayYmd()) setDate(todayYmd());
+    else pullAll();
   });
 }
 
