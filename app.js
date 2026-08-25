@@ -344,13 +344,17 @@ function renderItem(item, entry) {
       ul.appendChild(row);
     });
     wrap.appendChild(ul);
-    // add form
+    // add form — persists each in-progress field as a draft so tab switches don't wipe it
     const add = document.createElement("div");
     add.className = "triple-add";
+    const dKey = (fid) => `${item.id}_draft_${fid}`;
     for (const fld of item.fields) {
       const fw = document.createElement("div");
       fw.className = "triple-field";
       fw.innerHTML = `<label>${fld.label}</label><textarea rows="1" data-fid="${fld.id}" placeholder="${fld.ph || ""}"></textarea>`;
+      const ta = fw.querySelector("textarea");
+      ta.value = entry.notes[dKey(fld.id)] || "";
+      ta.addEventListener("input", (e) => setNote(dKey(fld.id), e.target.value, true));
       add.appendChild(fw);
     }
     const addBtn = document.createElement("button");
@@ -358,7 +362,10 @@ function renderItem(item, entry) {
     addBtn.onclick = () => {
       const obj = {};
       add.querySelectorAll("textarea").forEach((t) => obj[t.dataset.fid] = t.value.trim());
-      if (Object.values(obj).some(Boolean)) addTriple(item.id, obj);
+      if (Object.values(obj).some(Boolean)) {
+        for (const fld of item.fields) setNote(dKey(fld.id), "", true); // clear drafts
+        addTriple(item.id, obj);
+      }
     };
     add.appendChild(addBtn);
     wrap.appendChild(add);
@@ -389,7 +396,10 @@ function renderItem(item, entry) {
       `enterkeyhint="done" />` + `<button class="log-add-btn">Add</button>`;
     const input = add.querySelector(".log-input");
     input.dataset.log = item.id;   // lets the mic queue offline dictation into this log
-    const submit = () => { addLog(item.id, input.value); };
+    const draftKey = item.id + "_draft";
+    input.value = entry.notes[draftKey] || "";                              // restore in-progress text
+    input.addEventListener("input", (e) => setNote(draftKey, e.target.value, true)); // persist as you type
+    const submit = () => { const v = input.value; setNote(draftKey, "", true); addLog(item.id, v); };
     add.querySelector(".log-add-btn").onclick = submit;
     input.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); submit(); } });
     wrap.appendChild(ul);
