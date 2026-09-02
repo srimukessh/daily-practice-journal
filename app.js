@@ -1362,6 +1362,13 @@ function openRoutineInput(item) {
       if (error) throw error;
       if (!data || data.error || !(data.steps && data.steps.length)) throw new Error(data && data.error ? data.error : "no steps");
       load.remove();
+      // distil the prompt into "What came up" (append, don't clobber existing text)
+      const noteId = item.notes && item.notes[0] && item.notes[0].id;
+      const distilled = (data.note || situation || "").trim();
+      if (noteId && distilled) {
+        const cur = (loadEntry(currentDs).notes[noteId] || "").trim();
+        setNote(noteId, cur ? cur + "\n" + distilled : distilled, true);
+      }
       saveRoutine({ theme, situation, steps: data.steps, done: data.steps.map(() => false), ts: nowIso() });
       openRoutineView(item);
     } catch (e) { load.remove(); toast("Couldn't generate routine"); console.warn("routine failed", e); }

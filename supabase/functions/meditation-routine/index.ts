@@ -25,8 +25,9 @@ const SCHEMA = {
         additionalProperties: false,
       },
     },
+    note: { type: "string" },
   },
-  required: ["steps"],
+  required: ["steps", "note"],
   additionalProperties: false,
 };
 
@@ -45,7 +46,8 @@ Deno.serve(async (req: Request) => {
       "Use the standing context to make it personal (e.g. if they're going through a breakup, speak to that), but don't be heavy-handed.",
       "Each step: ONE short, concrete, second-person instruction (e.g. \"Bring the moment to mind and let yourself feel the sting.\"). Warm, calm, specific. No numbering, no preamble.",
       "Give each step a `seconds` duration to sit with it — usually 30–120s, longer for the deeper middle steps — so the whole session runs about 4–7 minutes.",
-      "Return ONLY JSON matching the schema, with 5–6 steps.",
+      "Also return `note`: a concise first-person distillation of the situation the person gave, in their own voice, for their journal's 'what came up' field (e.g. \"Sad about Bell leaving this evening — noticing how much I'm clinging.\"). 1–2 sentences. If no situation was given, return an empty string.",
+      "Return ONLY JSON matching the schema.",
     ].join("\n");
 
     const user = `Standing context: ${context || "(none given)"}\nTheme: ${theme || "(none given)"}\nSituation: ${situation || "(none given)"}`;
@@ -67,7 +69,7 @@ Deno.serve(async (req: Request) => {
       .map((s: any) => ({ text: String(s.text || "").trim(), seconds: Math.max(15, Math.min(300, Number(s.seconds) || 60)) }))
       .filter((s: any) => s.text)
       .slice(0, 6);
-    return json({ steps }, 200);
+    return json({ steps, note: String(parsed.note || "").trim() }, 200);
   } catch (e) {
     return json({ error: String(e) }, 500);
   }
