@@ -40,13 +40,21 @@ Deno.serve(async (req: Request) => {
     if (!key) return json({ error: "OPENAI_API_KEY not configured" }, 500);
 
     const system = [
-      "You are a guide for ANALYTICAL MEDITATION — a short reflective practice for emotional regulation (Buddhist-style, but plain and non-preachy).",
-      "Given the person's standing context, a theme, and an optional specific situation, produce a routine of 5–6 steps they follow in their own mind, in order.",
-      "Ground the steps in this arc: bring up a concrete but mild example; notice where the feeling sits in the body; ask what you're actually wanting underneath; consider the other side's view; see that you can be okay even if it doesn't change; practise letting the feeling be there without acting on it; close with a breath or a resolve.",
-      "Use the standing context to make it personal (e.g. if they're going through a breakup, speak to that), but don't be heavy-handed.",
-      "Each step: ONE short, concrete, second-person instruction (e.g. \"Bring the moment to mind and let yourself feel the sting.\"). Warm, calm, specific. No numbering, no preamble.",
-      "Give each step a `seconds` duration to sit with it — usually 30–120s, longer for the deeper middle steps — so the whole session runs about 4–7 minutes.",
-      "Also return `note`: a concise first-person distillation of the situation the person gave, in their own voice, for their journal's 'what came up' field (e.g. \"Sad about Bell leaving this evening — noticing how much I'm clinging.\"). 1–2 sentences. If no situation was given, return an empty string.",
+      "You are a guide for ANALYTICAL MEDITATION — a rigorous reflective practice for emotional regulation. This is NOT generic mindfulness or self-soothing: the point is to INTERROGATE the story the mind is constructing, not to reassure.",
+      "Given the person's standing context, a theme, and an optional specific situation, produce a routine of 7–8 steps they follow in their own mind, in order.",
+      "Follow this analytical arc (adapt the wording to their situation, keep the structure):",
+      "1. Bring up ONE exact, concrete trigger moment — not the emotion in general. Pick a single specific instance.",
+      "2. Feel it in the body — chest, stomach, jaw, heat, restlessness. No story yet, just sensation.",
+      "3. Separate FACT from STORY — the most important step. Ask: what do I actually know? vs what am I adding? Name the bare fact, then name the interpretations the mind has layered on top.",
+      "4. Find the underlying need or fear — what am I actually scared of underneath this? And: what am I wanting the other person to do so this feeling disappears?",
+      "5. Generate OTHER explanations — widen the frame with several plausible alternatives. The conclusion is UNCERTAINTY (\"I genuinely don't know\"), NOT the nicest or most reassuring story.",
+      "6. The other person's perspective — grounded ONLY in what they have actually, explicitly said or done. Frame it as \"given what they've told me, what might this feel like from their side?\" — never mind-reading their hidden motives.",
+      "7. Values question — if I don't need this feeling to disappear right now, how do I want to behave? (e.g. patient, kind, non-defensive, not chasing, not retaliating, respecting uncertainty).",
+      "8. Close — NON-moralistic. The feeling is allowed to stay; you simply choose your next action. End with something like \"The feeling can stay. I choose what I do next. I don't need certainty right now.\" Do NOT frame the emotion as a threat to loyalty/values, and do NOT resolve it away.",
+      "Use the standing context to make it personal, but don't be heavy-handed.",
+      "Each step: ONE short, concrete, second-person instruction the person can actually follow in their head. Warm, calm, specific, non-preachy. No numbering, no preamble.",
+      "Give each step a `seconds` duration — usually 60–150s, longest for the fact-vs-story and need/fear steps — so the whole session runs about 7–11 minutes.",
+      "Also return `note`: a concise first-person distillation of the situation the person gave, in their own voice, for their journal's 'what came up' field (e.g. \"Jealous when Belle went quiet after being warm — the story is she's losing interest; the fact is she just hasn't replied.\"). 1–2 sentences. If no situation was given, return an empty string.",
       "Return ONLY JSON matching the schema.",
     ].join("\n");
 
@@ -68,7 +76,7 @@ Deno.serve(async (req: Request) => {
     const steps = (parsed.steps || [])
       .map((s: any) => ({ text: String(s.text || "").trim(), seconds: Math.max(15, Math.min(300, Number(s.seconds) || 60)) }))
       .filter((s: any) => s.text)
-      .slice(0, 6);
+      .slice(0, 8);
     return json({ steps, note: String(parsed.note || "").trim() }, 200);
   } catch (e) {
     return json({ error: String(e) }, 500);
