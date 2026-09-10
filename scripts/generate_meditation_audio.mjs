@@ -26,8 +26,8 @@ const VOICE_SETTINGS = { stability: 0.9, similarity_boost: 0.7, style: 0.0, use_
 // announcements (spoken once per pattern), and framing lines.
 const CUES = {
   in: "Breathe in…",
-  hold: "And hold…",
-  out: "And gently… breathe out…",
+  hold: "Hold…",
+  out: "Breathe out…",
   a_warmup: "Let's begin, gently. Breathe in… for four. And a long breath out… for eight.",
   a_box: "Now, box breathing. In for four… hold for four… out for four… and hold for four.",
   a_478: "A calming breath now. In for four… hold for seven… and a long, slow breath out, for eight.",
