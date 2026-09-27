@@ -52,10 +52,19 @@ const SECTIONS = [
         hint: "“Regret the behaviour. Don't hate myself. Learn, practise, repeat.”" },
     ],
   },
+  {
+    title: "Journal",
+    items: [
+      { id: "journal", label: "Journal", freeText: true,
+        hint: "Anything else on your mind — free writing. Optional; doesn't count toward your day." },
+    ],
+  },
 ];
 
 const ALL_ITEMS = SECTIONS.flatMap((s) => s.items);
-const TOTAL_ITEMS = ALL_ITEMS.length;
+// items that count toward the daily 1/8 progress + streaks (free-text journal is excluded)
+const COUNTED_ITEMS = ALL_ITEMS.filter((it) => !it.freeText);
+const TOTAL_ITEMS = COUNTED_ITEMS.length;
 const SLEEP_MIN = 7; // hours; under this = "go easy on alcohol today"
 
 // ===== Small helpers =====
@@ -122,7 +131,7 @@ function itemDone(item, entry) {
   if (item.group) return item.group.every((g) => entry.checks[g.id]);
   return !!entry.checks[item.id];
 }
-function completedCount(entry) { return ALL_ITEMS.filter((it) => itemDone(it, entry)).length; }
+function completedCount(entry) { return COUNTED_ITEMS.filter((it) => itemDone(it, entry)).length; }
 function dayScore(entry) { return completedCount(entry) / TOTAL_ITEMS; }
 const PRACTISED = 0.5; // a day counts toward a streak at >= 50% complete
 
@@ -187,7 +196,7 @@ function renderItem(item, entry) {
   const head = document.createElement("div");
   head.className = "item-head";
 
-  if (!item.group && !item.log && !item.triple) {
+  if (!item.group && !item.log && !item.triple && !item.freeText) {
     const box = document.createElement("button");
     box.className = "check" + (entry.checks[item.id] ? " on" : "");
     box.innerHTML = CHECK_SVG;
@@ -316,6 +325,18 @@ function renderItem(item, entry) {
       chips.appendChild(c);
     }
     el.appendChild(chips);
+  }
+
+  // free-text journal (optional; doesn't count toward the day)
+  if (item.freeText) {
+    const wrap = document.createElement("div");
+    wrap.className = "note";
+    wrap.innerHTML = `<textarea class="journal-box" data-note="${item.id}" placeholder="Write whatever's on your mind…"></textarea>`;
+    const ta = wrap.querySelector("textarea");
+    ta.value = entry.notes[item.id] || "";
+    ta.addEventListener("input", (e) => setNote(item.id, e.target.value, /*silent*/ true));
+    el.appendChild(wrap);
+    attachFieldMic(ta);
   }
 
   // triples (evening review): a list of {regret, remedy, resolve}, add as many as you like
@@ -787,6 +808,7 @@ const SPEAKING_SCRIPT = [
 function buildAiSpec() {
   const props = {}, guide = [];
   for (const it of ALL_ITEMS) {
+    if (it.freeText) continue; // journal is free writing — AI never routes into it
     if (!it.group && !it.log && !it.triple) {
       props[it.id] = { type: ["boolean", "null"] };
       guide.push(`${it.id} (boolean): did they do “${it.label}”? null if not mentioned.`);
@@ -1282,6 +1304,7 @@ function buildDigest(days) {
         const bits = it.fields.map((f) => (tr[f.id] || "").trim() ? `${f.label}: ${tr[f.id].trim()}` : "").filter(Boolean);
         if (bits.length) parts.push(bits.join(" → "));
       }
+      if (it.freeText && (e.notes[it.id] || "").trim()) parts.push(`${it.label}: ${e.notes[it.id].trim()}`);
     }
     if (e.dump && e.dump.trim()) parts.push(`Journal: ${e.dump.trim()}`);
     if (parts.length) lines.push(`${ds}: ${parts.join("; ")}`);
