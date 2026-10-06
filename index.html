@@ -122,8 +122,12 @@
         <p id="acct-email" class="settings-hint"></p>
         <button id="signout-btn" class="danger-btn">Sign out</button>
 
-        <h2>About</h2>
-        <p class="settings-hint">Daily Practice — a private, offline-first journal for meditation and emotional regulation. Built for you; your data is yours.</p>
+        <h2>About &amp; privacy</h2>
+        <p class="settings-hint">Daily Practice — a private, offline-first journal for meditation and emotional regulation. Made by Kesh 🌙</p>
+        <p class="settings-hint"><strong>Where your data lives.</strong> What you write syncs to a private cloud database (Supabase, hosted on AWS) so it stays in step across your devices — that sync is the whole point of signing in. It travels over an encrypted connection (HTTPS) and is encrypted on disk.</p>
+        <p class="settings-hint"><strong>Who can read it.</strong> Each account can only ever read its own entries. Other signed-in users — and the app itself — are locked out of your rows by database security rules (row-level security). Your journal is never shared, sold, or used to train anything.</p>
+        <p class="settings-hint"><strong>Straight talk.</strong> This isn't end-to-end encrypted, so the person who runs the server (Kesh) could in principle open the database and read entries. He doesn't — but you shouldn't have to take that purely on trust, so treat this like a shared-hosted journal, not a sealed vault.</p>
+        <p class="settings-hint"><strong>AI features.</strong> When you tap “organise my day”, transcribe a voice note, generate a routine, or reflect over a period, that text is sent to OpenAI to process and returned. It isn't used to train their models. Nothing goes to AI unless you trigger it.</p>
         <p class="settings-hint version">offline-first PWA</p>
       </div>
     </section>
