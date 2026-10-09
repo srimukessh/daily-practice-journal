@@ -133,23 +133,23 @@ function itemDone(item, entry) {
 }
 function completedCount(entry) { return COUNTED_ITEMS.filter((it) => itemDone(it, entry)).length; }
 function dayScore(entry) { return completedCount(entry) / TOTAL_ITEMS; }
-const PRACTISED = 0.5; // a day counts toward a streak at >= 50% complete
+const PRACTISED_ITEMS = 3; // a day keeps the streak alive once you've done this many — showing up on a hard day counts
 
 function computeStreaks() {
   const scored = {};
-  for (const ds of allLocalDates()) scored[ds] = dayScore(loadEntry(ds));
+  for (const ds of allLocalDates()) scored[ds] = completedCount(loadEntry(ds));
   const totalDays = Object.values(scored).filter((s) => s > 0).length;
   // current streak: consecutive practised days ending today or yesterday.
   // Today being incomplete doesn't break it (you might not be done yet) — count up to yesterday.
   let current = 0, currentStart = null;
-  let i = (scored[todayYmd()] || 0) >= PRACTISED ? 0 : 1;
+  let i = (scored[todayYmd()] || 0) >= PRACTISED_ITEMS ? 0 : 1;
   for (; ; i++) {
     const ds = ymd(new Date(Date.now() - i * 864e5));
-    if ((scored[ds] || 0) >= PRACTISED) { current++; currentStart = ds; }
+    if ((scored[ds] || 0) >= PRACTISED_ITEMS) { current++; currentStart = ds; }
     else break;
   }
   // best streak across all recorded days
-  const dates = Object.keys(scored).filter((d) => scored[d] >= PRACTISED).sort();
+  const dates = Object.keys(scored).filter((d) => scored[d] >= PRACTISED_ITEMS).sort();
   let best = 0, run = 0, prev = null;
   for (const ds of dates) {
     if (prev && (new Date(ds) - new Date(prev)) === 864e5) run++;
