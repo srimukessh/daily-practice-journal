@@ -49,7 +49,7 @@ const SECTIONS = [
           options: ["Śāntideva — Bodhicaryāvatāra", "Anger by Thich Nhat Hanh", "The Practice of Lojong", "Tuesdays with Morrie", "Fiction", "Other"] },
         notes: [{ id: "reading_note", label: "What did you read & learn?", ph: "What book did you read, and what did you learn from it today?" }] },
       { id: "before_bed", label: "Before bed",
-        hint: "“Regret the behaviour. Don't hate myself. Learn, practise, repeat.”" },
+        hint: "“Regret the behaviour. Don't hate yourself. Learn, practise, repeat.”" },
     ],
   },
   {
