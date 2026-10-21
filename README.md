@@ -1,5 +1,10 @@
 # Daily Practice
 
+> ⛔ **All rights reserved — proprietary. Look, don't copy.**
+> This repository is public **only** to showcase the author's work. You are welcome to read it.
+> You may **not** copy, reuse, modify, or redistribute any part of it without written
+> permission. See [`LICENSE`](LICENSE). © 2026 Kesh Subramanian.
+
 A private, offline-first daily meditation & reflection checklist. Installs like an app on
 your iPhone and Mac from a single URL, works with no internet, and syncs your journal across
 devices through Supabase.
