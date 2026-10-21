@@ -11,7 +11,7 @@ devices through Supabase.
 
 - **No build step** — plain HTML/CSS/JS.
 - **Offline-first** — every edit saves to the device instantly; syncs when back online.
-- **Private** — magic-link login; each account sees only its own data (Row Level Security).
+- **Private** — email + password login; each account sees only its own data (Row Level Security).
 
 ---
 
@@ -36,10 +36,12 @@ streaks + a calendar. Edit the practice anytime in the `SECTIONS` array at the t
 2. Paste the entire contents of [`supabase/schema.sql`](supabase/schema.sql) → **Run**.
    You should see "Success". This creates the `entries` table with per-user security.
 
-### 3. Turn on email magic links
+### 3. Turn on email + password login
 1. Left sidebar → **Authentication** → **Providers** → **Email**.
-2. Ensure **Email** is enabled. (Confirm email can stay on.) Save.
-   > Supabase's built-in email works out of the box for personal use.
+2. Ensure **Email** is enabled, with **Confirm email** turned **off** (accounts activate
+   instantly — no confirmation email needed). Save.
+   > Email+password is used instead of magic links so it works inside the installed iOS PWA,
+   > which has separate storage from Safari and can't receive the magic-link redirect.
 
 ### 4. Get your two keys
 1. Left sidebar → **Project Settings** (gear) → **API**.
@@ -59,14 +61,15 @@ cd daily-practice-journal
 python3 -m http.server 5173
 # open http://localhost:5173
 ```
-Enter your email → click the link Supabase sends → you're in.
+Enter your email + a password → you're in. (First time on an email creates the account;
+same email + password on any other device syncs your journal.)
 
 ### 6. Deploy to Vercel (so your phone can reach it)
 1. Push this folder to a GitHub repo (see below), or run `npx vercel` from this folder.
 2. In Vercel: **Add New → Project** → import the repo → **Deploy** (no settings needed; it's static).
 3. Copy your `https://your-app.vercel.app` URL.
-4. Back in **Supabase → Authentication → URL Configuration**, add that URL to
-   **Site URL** and **Redirect URLs** so magic links return to the deployed app.
+4. Back in **Supabase → Authentication → URL Configuration**, set that URL as the
+   **Site URL** (and add it to **Redirect URLs**) so Supabase recognises the deployed app.
 
 ### 7. Install it as an app
 - **iPhone (Safari):** open the URL → Share → **Add to Home Screen**.
