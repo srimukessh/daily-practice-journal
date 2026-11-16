@@ -335,7 +335,7 @@ button { font-family: inherit; cursor: pointer; }
 .triple-input, .triple-add textarea {
   width: 100%; border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px;
   font: inherit; font-size: .92rem; line-height: 1.4; background: var(--card); color: var(--ink); outline: none;
-  resize: vertical; min-height: 2.9em; max-height: 6em; overflow-y: auto;
+  resize: vertical; min-height: calc(2.8em + 22px); max-height: 8em; overflow-y: auto;
 }
 .triple-input:focus, .triple-add textarea:focus { border-color: var(--indigo); background: var(--field-strong); }
 .triple-del { align-self: flex-end; background: none; border: 0; color: var(--muted); font-size: .8rem; padding: 2px 4px; }
