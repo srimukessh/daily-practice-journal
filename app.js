@@ -37,8 +37,8 @@ const SECTIONS = [
         hint: "For each thing that was hard: regret it, reflect on a remedy, resolve to respond differently. Add as many as you like.",
         fields: [
           { id: "regret", label: "Regret", ph: "What was unhelpful — what did I do, feel, want?" },
-          { id: "remedy", label: "Remedy / reflection", ph: "The antidote — e.g. it's not about me; what actually helps." },
-          { id: "resolve", label: "Resolve", ph: "How will I respond differently next time?" },
+          { id: "remedy", label: "Remedy / reflection", ph: "The truth that drains the charge NOW — what's actually true? (e.g. she went quiet because she was tired — not about me)" },
+          { id: "resolve", label: "Resolve", ph: "The plan for NEXT time — “When I feel X, I'll do Y.” One concrete action." },
         ] },
       { id: "rejoice", label: "Rejoice", accent: "warm",
         hint: "The fourth Opponent Power — appreciate what you did well.",
@@ -65,6 +65,35 @@ const ALL_ITEMS = SECTIONS.flatMap((s) => s.items);
 // items that count toward the daily progress + streaks (journal now counts once it has text)
 const COUNTED_ITEMS = ALL_ITEMS;
 const TOTAL_ITEMS = COUNTED_ITEMS.length;
+
+// Rotating daily prompts — a bank per field; the day advances one slot so the question
+// feels fresh without AI or randomness. Loops every 7 days. Shown above the box (never truncated).
+const ROTATING_PROMPTS = {
+  catch_310: [
+    "What did your body do first — before the thought?",
+    "What were you wanting them to do or say?",
+    "What story did you add on top of the bare fact?",
+    "What did you not do that you wanted to — and what did you do instead?",
+    "On a 1–10, how charged was it? What tipped it there?",
+    "What were you protecting, or afraid of, underneath?",
+    "If you paused — what did it cost you, and what did it save?",
+  ],
+  rejoice_note: [
+    "What did you handle well today?",
+    "What would past-you be proud of?",
+    "A small thing you almost didn't notice — what was it?",
+    "What did you do that your values would applaud?",
+    "Where did you choose the harder, better response?",
+    "What did you give someone today — attention, patience, space?",
+    "What's one thing you'd do again exactly the same?",
+  ],
+};
+function rotatingPrompt(key, ds) {
+  const bank = ROTATING_PROMPTS[key];
+  if (!bank) return null;
+  const dayIdx = Math.floor(Date.parse(ds + "T00:00:00") / 864e5); // whole-day number for this date
+  return bank[((dayIdx % bank.length) + bank.length) % bank.length];
+}
 const SLEEP_MIN = 7; // hours; under this = "go easy on alcohol today"
 
 // ===== Small helpers =====
@@ -412,9 +441,11 @@ function renderItem(item, entry) {
       row.querySelector(".log-del").onclick = () => removeLog(item.id, idx);
       ul.appendChild(row);
     });
+    const prompt = rotatingPrompt(item.id, currentDs);     // today's angle, shown full-width above the box
     const add = document.createElement("div");
     add.className = "log-add";
-    add.innerHTML = `<input type="text" class="log-input" placeholder="${item.logPh || "Add one…"}" ` +
+    const ph = prompt ? "Add a moment…" : (item.logPh || "Add one…");
+    add.innerHTML = `<input type="text" class="log-input" placeholder="${ph}" ` +
       `enterkeyhint="done" />` + `<button class="log-add-btn">Add</button>`;
     const input = add.querySelector(".log-input");
     input.dataset.log = item.id;   // lets the mic queue offline dictation into this log
@@ -425,6 +456,12 @@ function renderItem(item, entry) {
     add.querySelector(".log-add-btn").onclick = submit;
     input.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); submit(); } });
     wrap.appendChild(ul);
+    if (prompt) {
+      const p = document.createElement("div");
+      p.className = "field-prompt";
+      p.textContent = prompt;
+      wrap.appendChild(p);
+    }
     wrap.appendChild(add);
     el.appendChild(wrap);
     attachFieldMic(input);   // 🎤 dictate a 3/10 / pause
@@ -433,9 +470,10 @@ function renderItem(item, entry) {
   // text notes
   if (item.notes) {
     for (const n of item.notes) {
+      const label = rotatingPrompt(n.id, currentDs) || n.label;  // rotating daily angle where one exists
       const wrap = document.createElement("div");
       wrap.className = "note";
-      wrap.innerHTML = `<label>${n.label}</label><textarea rows="2" data-note="${n.id}" placeholder="${n.ph || ""}"></textarea>`;
+      wrap.innerHTML = `<label>${label}</label><textarea rows="2" data-note="${n.id}" placeholder="${n.ph || ""}"></textarea>`;
       const ta = wrap.querySelector("textarea");
       ta.value = entry.notes[n.id] || "";
       ta.addEventListener("input", (e) => setNote(n.id, e.target.value, /*silent*/ true));
