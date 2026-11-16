@@ -56,14 +56,14 @@ const SECTIONS = [
     title: "Journal",
     items: [
       { id: "journal", label: "Journal", freeText: true,
-        hint: "Anything else on your mind — free writing. Optional; doesn't count toward your day." },
+        hint: "Anything else on your mind — free writing. Counts toward your day once you've written something." },
     ],
   },
 ];
 
 const ALL_ITEMS = SECTIONS.flatMap((s) => s.items);
-// items that count toward the daily 1/8 progress + streaks (free-text journal is excluded)
-const COUNTED_ITEMS = ALL_ITEMS.filter((it) => !it.freeText);
+// items that count toward the daily progress + streaks (journal now counts once it has text)
+const COUNTED_ITEMS = ALL_ITEMS;
 const TOTAL_ITEMS = COUNTED_ITEMS.length;
 const SLEEP_MIN = 7; // hours; under this = "go easy on alcohol today"
 
@@ -126,6 +126,7 @@ function clearDirty(ds) {
 
 // ===== Completion / streak math =====
 function itemDone(item, entry) {
+  if (item.freeText) return !!((entry.notes[item.id] || "").trim());
   if (item.triple) return (entry.triples[item.id] || []).length > 0;
   if (item.log) return (entry.logs[item.id] || []).length > 0;
   if (item.group) return item.group.every((g) => entry.checks[g.id]);
@@ -1514,7 +1515,7 @@ const GUIDED_TRACKS = [
 ];
 
 function openMeditationSetup(item) {
-  let mins = 5, bg = "rain";
+  let mins = 5, bg = "ocean";
   const tracks = GUIDED_TRACKS.map((t) => `<button class="routine-btn track" data-track="${t.id}">${t.label}</button>`).join("");
   const ov = buildOverlay(`
     <div class="sheet-head"><h2>Concentration meditation</h2><button class="sheet-x" aria-label="close">×</button></div>
@@ -1528,8 +1529,8 @@ function openMeditationSetup(item) {
       <button class="range-chip" data-m="10">10 min</button>
     </div>
     <div class="range-chips wrap" id="med-bgs" style="margin-top:8px">
-      <button class="range-chip on" data-bg="rain">🌧 Rain</button>
-      <button class="range-chip" data-bg="ocean">🌊 Ocean</button>
+      <button class="range-chip" data-bg="rain">🌧 Rain</button>
+      <button class="range-chip on" data-bg="ocean">🌊 Ocean</button>
       <button class="range-chip" data-bg="spiritual">🕉 Spiritual</button>
       <button class="range-chip" data-bg="silent">Silent</button>
     </div>
