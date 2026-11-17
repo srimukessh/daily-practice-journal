@@ -62,9 +62,11 @@ const SECTIONS = [
 ];
 
 const ALL_ITEMS = SECTIONS.flatMap((s) => s.items);
-// items that count toward the daily progress + streaks (journal now counts once it has text)
+// items that can count toward the day (journal counts once it has text)
 const COUNTED_ITEMS = ALL_ITEMS;
-const TOTAL_ITEMS = COUNTED_ITEMS.length;
+// the day maxes at 8/8 even though there are 9 possible items — any 8 of them fills it
+// (so journal is a swap-in: skip one practice item, journal instead, still a full day)
+const TOTAL_ITEMS = 8;
 
 // Rotating daily prompts — a bank per field; the day advances one slot so the question
 // feels fresh without AI or randomness. Loops every 7 days. Shown above the box (never truncated).
@@ -161,7 +163,7 @@ function itemDone(item, entry) {
   if (item.group) return item.group.every((g) => entry.checks[g.id]);
   return !!entry.checks[item.id];
 }
-function completedCount(entry) { return COUNTED_ITEMS.filter((it) => itemDone(it, entry)).length; }
+function completedCount(entry) { return Math.min(COUNTED_ITEMS.filter((it) => itemDone(it, entry)).length, TOTAL_ITEMS); }
 function dayScore(entry) { return completedCount(entry) / TOTAL_ITEMS; }
 const PRACTISED_ITEMS = 3; // a day keeps the streak alive once you've done this many — showing up on a hard day counts
 
