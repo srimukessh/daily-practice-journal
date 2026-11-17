@@ -47,8 +47,8 @@ Deno.serve(async (req: Request) => {
     ].join("\n");
 
     const body = {
-      model: "gpt-4o",
-      temperature: 0.2,
+      model: "gpt-5.1",
+      reasoning_effort: "low", // interactive — routing accuracy with low latency (user waits right after speaking)
       messages: [
         { role: "system", content: system },
         { role: "user", content: String(transcript) },
