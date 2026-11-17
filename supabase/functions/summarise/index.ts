@@ -50,7 +50,7 @@ Deno.serve(async (req: Request) => {
       method: "POST",
       headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
       body: JSON.stringify({
-        model: "o4-mini",
+        model: "gpt-5.1",
         reasoning_effort: "high",
         messages: [{ role: "system", content: system }, { role: "user", content: String(digest) }],
         response_format: { type: "json_schema", json_schema: { name: "summary", strict: true, schema: SCHEMA } },

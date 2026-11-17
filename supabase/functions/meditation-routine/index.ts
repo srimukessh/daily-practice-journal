@@ -66,8 +66,8 @@ Deno.serve(async (req: Request) => {
       method: "POST",
       headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
       body: JSON.stringify({
-        // reasoning model — the routine is the most nuanced output; depth over speed (no temperature on o-series)
-        model: "o4-mini",
+        // reasoning model — the routine is the most nuanced output; depth over speed (no temperature)
+        model: "gpt-5.1",
         reasoning_effort: "high",
         messages: [{ role: "system", content: system }, { role: "user", content: user }],
         response_format: { type: "json_schema", json_schema: { name: "routine", strict: true, schema: SCHEMA } },
